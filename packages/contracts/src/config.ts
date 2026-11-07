@@ -1,0 +1,77 @@
+/**
+ * Modelo de configuração de projeto — docs/05-PROJECT-CONFIGURATION.md.
+ *
+ * Diferenças deliberadas em relação ao exemplo do documento:
+ * - `runtime.executable` + `runtime.args` substituem `command`, que era
+ *   apenas exibição. Não existe forma de configurar shell.
+ * - `port`/`portSource` foram adicionados (ADR-010, I-1).
+ * - `startupOrder` foi adicionado para início determinístico (ADR-010, I-3).
+ */
+export type PortSource = 'none' | 'fixed' | 'env' | 'detected';
+
+export const PORT_SOURCES = ['none', 'fixed', 'env', 'detected'] as const;
+
+export interface RestartPolicy {
+  enabled: boolean;
+  maxRetries: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  jitterRatio: number;
+  stableAfterMs: number;
+  resetRetriesAfterStable: boolean;
+}
+
+export type HealthCheckType = 'http' | 'tcp';
+
+export interface HealthCheckConfig {
+  enabled: boolean;
+  type: HealthCheckType;
+  target: string;
+  expectedStatus: number;
+  intervalMs: number;
+  timeoutMs: number;
+  failureThreshold: number;
+  restartOnUnhealthy: boolean;
+  unhealthyRestartCooldownMs: number;
+}
+
+export interface LoggingConfig {
+  maxFileSizeMb: number;
+  retentionDays: number;
+  captureOutput: boolean;
+  maskPatterns: string[];
+}
+
+export interface ShutdownConfig {
+  gracefulTimeoutMs: number;
+}
+
+export interface RuntimeConfig {
+  /** Executável absoluto ou nome resolvível no PATH (nunca uma linha de shell). */
+  executable: string;
+  args: string[];
+}
+
+export interface ProjectConfig {
+  id: string;
+  name: string;
+  description: string | null;
+  groupId: string | null;
+  enabled: boolean;
+  startOnBoot: boolean;
+  startupOrder: number;
+  workingDirectory: string;
+  runtime: RuntimeConfig;
+  environment: Record<string, string>;
+  port: number | null;
+  portSource: PortSource;
+  restartPolicy: RestartPolicy;
+  healthCheck: HealthCheckConfig;
+  logging: LoggingConfig;
+  shutdown: ShutdownConfig;
+  schemaVersion: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const CURRENT_CONFIG_SCHEMA_VERSION = 1;

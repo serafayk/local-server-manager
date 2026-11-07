@@ -1,0 +1,256 @@
+import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { PROTOCOL_VERSION, type EngineInfo } from '@lsm/contracts';
+import { DEFAULT_ENGINE_SETTINGS, resolveAppPaths, type AppPaths } from '@lsm/config';
+import {
+  createRepositories,
+  migrate,
+  openDatabase,
+  type AppDatabase,
+  type Repositories,
+} from '@lsm/database';
+import type { Clock, Logger, TimerHandle } from '@lsm/shared';
+import { createFileSink, createLogger, createStreamSink, createSystemClock } from '@lsm/shared';
+import { EventBus } from '../core/event-bus';
+import { LogManager } from '../log-manager/log-manager';
+import { runLogRetention } from '../log-manager/log-retention';
+import { ProcessManager } from '../process-manager/process-manager';
+import { ProjectService } from '../supervisor/project-service';
+import { Supervisor } from '../supervisor/supervisor';
+import { reconcileInstances } from './reconciliation';
+import { acquireInstanceLock, type InstanceLock } from './single-instance';
+
+const LOG_RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1_000;
+
+export interface CreateEngineOptions {
+  /** Sobrescreve o diretório de dados (testes e CLI). */
+  dataDir?: string;
+  env?: NodeJS.ProcessEnv;
+  clock?: Clock;
+  logger?: Logger;
+  /** Desabilita o lock de instância única (somente diagnóstico/testes). */
+  singleInstance?: boolean;
+}
+
+export interface Engine {
+  readonly paths: AppPaths;
+  readonly logger: Logger;
+  readonly clock: Clock;
+  readonly db: AppDatabase;
+  readonly repositories: Repositories;
+  readonly events: EventBus;
+  readonly logManager: LogManager;
+  readonly processManager: ProcessManager;
+  readonly supervisor: Supervisor;
+  readonly projects: ProjectService;
+  start(): Promise<void>;
+  shutdown(reason?: string): Promise<void>;
+  info(): EngineInfo;
+}
+
+export function createEngine(options: CreateEngineOptions = {}): Engine {
+  const paths = resolveAppPaths({ dataDir: options.dataDir, env: options.env });
+  mkdirSync(paths.dataDir, { recursive: true });
+  mkdirSync(paths.logsDir, { recursive: true });
+  mkdirSync(paths.backupsDir, { recursive: true });
+  mkdirSync(paths.engineDir, { recursive: true });
+
+  const clock = options.clock ?? createSystemClock();
+  const logger =
+    options.logger ??
+    createLogger({
+      level: DEFAULT_ENGINE_SETTINGS.logLevel,
+      base: { app: 'engine' },
+      sinks: [createStreamSink(process.stdout), createFileSink(paths.engineLogFile)],
+    });
+
+  const db = openDatabase({ file: paths.databaseFile });
+  const repositories = createRepositories(db.connection);
+  const events = new EventBus(clock, logger);
+  const logManager = new LogManager({
+    logsDir: paths.logsDir,
+    clock,
+    logger,
+    events,
+  });
+  const processManager = new ProcessManager(logger);
+  const supervisor = new Supervisor({
+    repositories,
+    logManager,
+    events,
+    clock,
+    logger,
+    processManager,
+    batchConcurrency: DEFAULT_ENGINE_SETTINGS.batchConcurrency,
+  });
+  const projects = new ProjectService({
+    repositories,
+    supervisor,
+    logManager,
+    events,
+    clock,
+    logger,
+  });
+
+  let lock: InstanceLock | null = null;
+  let startedAt: string | null = null;
+  let starting = false;
+  let started = false;
+  let shuttingDown = false;
+  let retentionTimer: TimerHandle | null = null;
+
+  const runRetention = (): void => {
+    try {
+      const projects = repositories.projects.list();
+      const retentionByProject = new Map<string, number>(
+        projects.map((project) => [project.id, project.logging.retentionDays]),
+      );
+      const result = runLogRetention({
+        logsDir: paths.logsDir,
+        retentionByProject,
+        activeInstanceIds: new Set(logManager.activeInstanceIds()),
+        nowMs: clock.nowMs(),
+        logger,
+      });
+      if (result.removedFiles > 0) {
+        logger.info('Retenção de logs aplicada', { ...result });
+      }
+    } catch (error) {
+      logger.warn('Falha ao aplicar retenção de logs', {}, error);
+    }
+  };
+
+  const scheduleRetention = (): void => {
+    retentionTimer = clock.setTimeout(() => {
+      retentionTimer = null;
+      runRetention();
+      scheduleRetention();
+    }, LOG_RETENTION_INTERVAL_MS);
+    retentionTimer.unref();
+  };
+
+  const engine: Engine = {
+    paths,
+    logger,
+    clock,
+    db,
+    repositories,
+    events,
+    logManager,
+    processManager,
+    supervisor,
+    projects,
+
+    async start(): Promise<void> {
+      if (started || starting) {
+        return;
+      }
+      starting = true;
+      try {
+        if (options.singleInstance !== false) {
+          lock = await acquireInstanceLock(paths.engineLockKey);
+        }
+
+        const migration = migrate(db.connection, {
+          databaseFile: paths.databaseFile,
+          backupDir: paths.backupsDir,
+          now: () => clock.nowIso(),
+        });
+        if (migration.applied.length > 0) {
+          logger.info('Migrações aplicadas', {
+            versions: migration.applied,
+            backup: migration.backupFile,
+          });
+        }
+
+        for (const config of repositories.projects.list()) {
+          supervisor.registerProject(config);
+        }
+
+        const reconciliation = await reconcileInstances({ repositories, clock, logger });
+
+        startedAt = clock.nowIso();
+        writeFileSync(paths.engineInfoFile, `${JSON.stringify(engine.info(), null, 2)}\n`, 'utf8');
+
+        started = true;
+        events.emit('engine.ready', {
+          pid: process.pid,
+          dataDir: paths.root,
+          startedAt,
+        });
+        repositories.events.append({
+          projectId: null,
+          instanceId: null,
+          level: 'info',
+          eventType: 'engine.ready',
+          message: 'Engine iniciado',
+          metadata: { pid: process.pid, dataDir: paths.root },
+          createdAt: startedAt,
+        });
+        logger.info('Engine pronto', {
+          pid: process.pid,
+          dataDir: paths.root,
+          projects: repositories.projects.list().length,
+        });
+
+        runRetention();
+        scheduleRetention();
+
+        await supervisor.startBootProjects(new Set(reconciliation.blockedProjectIds));
+      } catch (error) {
+        started = false;
+        await lock?.release().catch(() => undefined);
+        lock = null;
+        throw error;
+      } finally {
+        starting = false;
+      }
+    },
+
+    async shutdown(reason = 'manual'): Promise<void> {
+      if (shuttingDown) {
+        return;
+      }
+      shuttingDown = true;
+      try {
+        events.emit('engine.shutdown', { reason });
+        repositories.events.append({
+          projectId: null,
+          instanceId: null,
+          level: 'info',
+          eventType: 'engine.shutdown',
+          message: `Engine encerrando (${reason})`,
+          metadata: { reason },
+        });
+        logger.info('Encerrando Engine', { reason });
+        await supervisor.shutdown();
+        await logManager.closeAll();
+      } finally {
+        if (retentionTimer) {
+          clock.clearTimeout(retentionTimer);
+          retentionTimer = null;
+        }
+        try {
+          unlinkSync(paths.engineInfoFile);
+        } catch {
+          // Arquivo de info pode não existir se o start falhou.
+        }
+        await lock?.release().catch(() => undefined);
+        lock = null;
+        db.close();
+        started = false;
+      }
+    },
+
+    info(): EngineInfo {
+      return {
+        pid: process.pid,
+        protocolVersion: PROTOCOL_VERSION,
+        dataDir: paths.root,
+        startedAt: startedAt ?? clock.nowIso(),
+        projects: supervisor.listProjects().length,
+      };
+    },
+  };
+
+  return engine;
+}

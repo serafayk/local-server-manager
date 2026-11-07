@@ -1,0 +1,24 @@
+{
+  "name": "@lsm/engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/bootstrap/main.ts",
+    "start": "node dist/bootstrap/main.mjs",
+    "cli": "tsx src/dev-cli/main.ts",
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@lsm/config": "workspace:*",
+    "@lsm/contracts": "workspace:*",
+    "@lsm/database": "workspace:*",
+    "@lsm/platform-win": "workspace:*",
+    "@lsm/shared": "workspace:*",
+    "@lsm/validation": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "tsx": "4.23.15"
+  }
+}

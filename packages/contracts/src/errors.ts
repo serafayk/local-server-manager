@@ -1,0 +1,65 @@
+/**
+ * Códigos de erro estáveis do protocolo.
+ *
+ * Os 13 primeiros vêm de docs/06-API-CONTRACTS.md §5. Os demais foram
+ * adicionados durante a implementação da Fase 1 e estão documentados em
+ * docs/14-ADR.md (ADR-010).
+ */
+export const ERROR_CODES = [
+  // Especificados em docs/06
+  'PROJECT_NOT_FOUND',
+  'PROJECT_INVALID_CONFIG',
+  'PROJECT_ALREADY_RUNNING',
+  'PROJECT_NOT_RUNNING',
+  'PROJECT_START_FAILED',
+  'PROJECT_STOP_TIMEOUT',
+  'WORKING_DIRECTORY_NOT_FOUND',
+  'EXECUTABLE_NOT_FOUND',
+  'PORT_IN_USE',
+  'ENGINE_BUSY',
+  'UNAUTHORIZED',
+  'VALIDATION_ERROR',
+  'INTERNAL_ERROR',
+  // Adicionados na implementação (documentados em ADR-010)
+  'EXECUTABLE_REQUIRES_SHELL',
+  'PROJECT_NAME_IN_USE',
+  'INVALID_STATE_TRANSITION',
+  'STORAGE_ERROR',
+  'PROTOCOL_VERSION_MISMATCH',
+  'UNSUPPORTED_PLATFORM',
+  'LOG_WRITE_FAILED',
+] as const;
+
+export type ErrorCode = (typeof ERROR_CODES)[number];
+
+export interface OperationError {
+  code: ErrorCode;
+  message: string;
+  details?: unknown;
+}
+
+/**
+ * Mapeamento código -> status HTTP para a API local (Fase 3).
+ */
+export const ERROR_HTTP_STATUS: Readonly<Record<ErrorCode, number>> = {
+  PROJECT_NOT_FOUND: 404,
+  PROJECT_INVALID_CONFIG: 422,
+  PROJECT_ALREADY_RUNNING: 409,
+  PROJECT_NOT_RUNNING: 409,
+  PROJECT_START_FAILED: 500,
+  PROJECT_STOP_TIMEOUT: 504,
+  WORKING_DIRECTORY_NOT_FOUND: 422,
+  EXECUTABLE_NOT_FOUND: 422,
+  PORT_IN_USE: 409,
+  ENGINE_BUSY: 503,
+  UNAUTHORIZED: 401,
+  VALIDATION_ERROR: 400,
+  INTERNAL_ERROR: 500,
+  EXECUTABLE_REQUIRES_SHELL: 422,
+  PROJECT_NAME_IN_USE: 409,
+  INVALID_STATE_TRANSITION: 409,
+  STORAGE_ERROR: 500,
+  PROTOCOL_VERSION_MISMATCH: 409,
+  UNSUPPORTED_PLATFORM: 501,
+  LOG_WRITE_FAILED: 500,
+};

@@ -1,0 +1,42 @@
+{
+  "name": "local-server-manager",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Gerenciador desktop Windows de projetos Node.js com Engine independente e supervisor próprio.",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "build": "pnpm --filter @lsm/engine build",
+    "cli": "pnpm --filter @lsm/engine cli",
+    "engine": "pnpm --filter @lsm/engine start",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@lsm/config": "workspace:*",
+    "@lsm/contracts": "workspace:*",
+    "@lsm/database": "workspace:*",
+    "@lsm/platform-win": "workspace:*",
+    "@lsm/shared": "workspace:*",
+    "@lsm/validation": "workspace:*",
+    "@types/node": "24.19.2",
+    "@vitest/coverage-v8": "5.1.0",
+    "eslint": "9.39.5",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.1.0"
+  }
+}

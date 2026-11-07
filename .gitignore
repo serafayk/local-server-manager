@@ -1,0 +1,33 @@
+# Dependências
+node_modules/
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+
+# Testes
+coverage/
+.vitest/
+
+# Artefatos locais do aplicativo (nunca versionar dados de runtime)
+.data/
+logs/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Ambiente
+.env
+.env.*
+
+# Sistema operacional / editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+
+# Documentação duplicada distribuída em zip
+*.zip

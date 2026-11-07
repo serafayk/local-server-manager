@@ -1,0 +1,4 @@
+*.log
+dist/
+coverage/
+pnpm-lock.yaml
