@@ -18,6 +18,13 @@ const SHIM_WITH_JS = [
 
 const SHIM_WITHOUT_JS = ['@SETLOCAL', 'call "%~dp0\\real-tool.cmd" %*'].join('\r\n');
 
+const NPM_STYLE_SHIM = [
+  '@ECHO OFF',
+  'SET "NPM_PREFIX_JS=%~dp0\\node_modules\\npm\\bin\\npm-prefix.js"',
+  'SET "NPM_CLI_JS=%~dp0\\node_modules\\npm\\bin\\npm-cli.js"',
+  '"%NODE_EXE%" "%NPM_CLI_JS%" %*',
+].join('\r\n');
+
 function withFakePackageManager(shimContent: string, work: (directory: string) => void): void {
   const directory = createTempDir('lsm-pm-');
   try {
@@ -46,6 +53,28 @@ describe('resolvePackageManagerInvocation', () => {
       expect(invocation.args.slice(1)).toEqual(['run', 'dev']);
       expect(invocation.warnings).toEqual([]);
     });
+  });
+
+  it.skipIf(!isWindows)('prefere npm-cli.js a npm-prefix.js no shim do npm', () => {
+    const directory = createTempDir('lsm-pm-npm-');
+    try {
+      const binDir = join(directory, 'node_modules', 'npm', 'bin');
+      mkdirSync(binDir, { recursive: true });
+      writeFileSync(join(binDir, 'npm-prefix.js'), '// prefix\n', 'utf8');
+      writeFileSync(join(binDir, 'npm-cli.js'), '// cli\n', 'utf8');
+      writeFileSync(join(directory, 'npm.cmd'), NPM_STYLE_SHIM, 'utf8');
+
+      const invocation = resolvePackageManagerInvocation('npm', 'dev', {
+        pathEnv: directory,
+        pathext: '.CMD',
+      });
+
+      expect(invocation.mode).toBe('node-cli');
+      expect(invocation.args[0]?.toLowerCase()).toBe(join(binDir, 'npm-cli.js').toLowerCase());
+      expect(invocation.args.slice(1)).toEqual(['run', 'dev']);
+    } finally {
+      removeTempDir(directory);
+    }
   });
 
   it.skipIf(!isWindows)('cai para cmd.exe validado quando não há entrypoint JS', () => {

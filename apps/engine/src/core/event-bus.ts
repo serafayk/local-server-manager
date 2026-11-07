@@ -13,6 +13,7 @@ type AnyHandler = (event: DomainEvent) => void;
  */
 export class EventBus {
   private readonly handlers = new Map<DomainEventType, Set<AnyHandler>>();
+  private readonly anyHandlers = new Set<AnyHandler>();
 
   constructor(
     private readonly clock: Clock,
@@ -32,12 +33,21 @@ export class EventBus {
     this.handlers.get(type)?.delete(handler as AnyHandler);
   }
 
-  emit<K extends DomainEventType>(
+  /** Assina todos os eventos (usado pelo gateway WebSocket). */
+  onAny(handler: (event: DomainEvent) => void): Unsubscribe {
+    this.anyHandlers.add(handler);
+    return () => {
+      this.anyHandlers.delete(handler);
+    };
+  }
+
+  /** Cria o envelope sem despachar (snapshots enviados a um cliente novo). */
+  build<K extends DomainEventType>(
     type: K,
     payload: DomainEventPayloads[K],
     projectId?: string,
   ): DomainEvent<K> {
-    const event: DomainEvent<K> = {
+    return {
       eventId: newId(),
       protocolVersion: PROTOCOL_VERSION,
       type,
@@ -45,19 +55,33 @@ export class EventBus {
       payload,
       ...(projectId !== undefined ? { projectId } : {}),
     };
+  }
+
+  emit<K extends DomainEventType>(
+    type: K,
+    payload: DomainEventPayloads[K],
+    projectId?: string,
+  ): DomainEvent<K> {
+    const event = this.build(type, payload, projectId);
 
     const subscribers = this.handlers.get(type);
-    if (!subscribers) {
-      return event;
-    }
-    for (const handler of subscribers) {
-      try {
-        handler(event as DomainEvent);
-      } catch (error) {
-        this.logger.error('Falha em assinante de evento', { eventType: type }, error);
+    if (subscribers) {
+      for (const handler of subscribers) {
+        this.safeCall(handler, event as DomainEvent);
       }
     }
+    for (const handler of this.anyHandlers) {
+      this.safeCall(handler, event as DomainEvent);
+    }
     return event;
+  }
+
+  private safeCall(handler: AnyHandler, event: DomainEvent): void {
+    try {
+      handler(event);
+    } catch (error) {
+      this.logger.error('Falha em assinante de evento', { eventType: event.type }, error);
+    }
   }
 
   listenerCount(type?: DomainEventType): number {
@@ -73,5 +97,6 @@ export class EventBus {
 
   clear(): void {
     this.handlers.clear();
+    this.anyHandlers.clear();
   }
 }

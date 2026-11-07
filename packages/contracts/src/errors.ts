@@ -28,6 +28,7 @@ export const ERROR_CODES = [
   'PROTOCOL_VERSION_MISMATCH',
   'UNSUPPORTED_PLATFORM',
   'LOG_WRITE_FAILED',
+  'ROUTE_NOT_FOUND',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -62,4 +63,5 @@ export const ERROR_HTTP_STATUS: Readonly<Record<ErrorCode, number>> = {
   PROTOCOL_VERSION_MISMATCH: 409,
   UNSUPPORTED_PLATFORM: 501,
   LOG_WRITE_FAILED: 500,
+  ROUTE_NOT_FOUND: 404,
 };

@@ -10,12 +10,15 @@
     "build": "node build.mjs"
   },
   "dependencies": {
+    "@fastify/cors": "11.4.1",
+    "@fastify/websocket": "11.3.7",
     "@lsm/config": "workspace:*",
     "@lsm/contracts": "workspace:*",
     "@lsm/database": "workspace:*",
     "@lsm/platform-win": "workspace:*",
     "@lsm/shared": "workspace:*",
-    "@lsm/validation": "workspace:*"
+    "@lsm/validation": "workspace:*",
+    "fastify": "5.12.8"
   },
   "devDependencies": {
     "esbuild": "0.28.2",

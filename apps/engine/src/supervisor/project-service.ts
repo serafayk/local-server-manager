@@ -4,7 +4,7 @@ import { CURRENT_CONFIG_SCHEMA_VERSION } from '@lsm/contracts';
 import type { Repositories } from '@lsm/database';
 import type { Clock, Logger } from '@lsm/shared';
 import { AppError, newId } from '@lsm/shared';
-import { parseCreateProjectRequest } from '@lsm/validation';
+import { parseCreateProjectRequest, parseUpdateProjectRequest } from '@lsm/validation';
 import type { EventBus } from '../core/event-bus';
 import type { LogManager } from '../log-manager/log-manager';
 import { isActiveStatus } from './project-runtime';
@@ -73,6 +73,38 @@ export class ProjectService {
     return config;
   }
 
+  updateProject(projectIdOrName: string, input: unknown): ProjectConfig {
+    const existing = this.getProject(projectIdOrName);
+    const snapshot = this.deps.supervisor.getSnapshotById(existing.id);
+    if (snapshot && isActiveStatus(snapshot.status)) {
+      throw new AppError(
+        'ENGINE_BUSY',
+        `Pare o projeto "${existing.name}" antes de editar a configuração.`,
+      );
+    }
+
+    const config = parseUpdateProjectRequest(existing, input, this.deps.clock.nowIso());
+
+    this.deps.repositories.projects.update(config);
+    this.deps.supervisor.registerProject(config);
+
+    this.deps.repositories.events.append({
+      projectId: config.id,
+      instanceId: null,
+      level: 'info',
+      eventType: 'project.updated',
+      message: `projeto "${config.name}" atualizado`,
+      metadata: { name: config.name },
+    });
+    this.deps.events.emit(
+      'project.updated',
+      { projectId: config.id, name: config.name },
+      config.id,
+    );
+    this.deps.logger.info('Projeto atualizado', { projectId: config.id, name: config.name });
+    return config;
+  }
+
   deleteProject(projectIdOrName: string): { id: string; name: string } {
     const config = this.getProject(projectIdOrName);
     const snapshot = this.deps.supervisor.getSnapshotById(config.id);
@@ -127,8 +159,18 @@ export class ProjectService {
     return this.deps.repositories.events.list(options);
   }
 
-  tailLogs(projectIdOrName: string, limit = 50): TailLogsResult {
+  tailLogs(projectIdOrName: string, limit = 50, instanceId?: string): TailLogsResult {
     const config = this.getProject(projectIdOrName);
+    if (instanceId !== undefined) {
+      // Evita traversal: instanceId vira nome de arquivo no LogManager.
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(instanceId)) {
+        throw new AppError('VALIDATION_ERROR', `instanceId inválido: ${instanceId}`);
+      }
+      return {
+        instanceId,
+        records: this.deps.logManager.tail(config.id, instanceId, limit),
+      };
+    }
     const latest = this.deps.repositories.instances.listByProject(config.id, 1)[0];
     if (!latest) {
       return { instanceId: null, records: [] };

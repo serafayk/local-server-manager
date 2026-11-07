@@ -2,6 +2,29 @@
 
 Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicionadas no topo com data, contexto, decisão, alternativas e consequências.
 
+## ADR-014 — API local HTTP + WebSocket para o desktop
+
+**Status:** Aceita (Fase 3)
+
+**Contexto:** O desktop precisa controlar o Engine sem `child_process` no renderer. A especificação prefere Named Pipe, mas aceita HTTP loopback autenticado como alternativa. Era preciso fechar transporte, autenticação, contrato de erro e estratégia de reconexão.
+
+**Decisão:**
+
+1. Transporte do MVP: HTTP em `127.0.0.1` com porta efêmera + WebSocket em `/api/v1/ws`. Named Pipe com ACL continua como evolução.
+2. `engine/engine.json` publica `{ host, port, baseUrl, token, websocketPath, protocolVersion }`. O token (32 bytes, base64url) é gerado a cada execução e comparado com `timingSafeEqual`.
+3. Defesas: bind exclusivo em loopback, validação de `Host` contra DNS rebinding, CORS por allowlist, corpo máximo de 1 MB, `nosniff`, `no-store`, sem stack trace na resposta.
+4. Versão: `/api/v1` + `X-Protocol-Version` opcional; divergência → 409 `PROTOCOL_VERSION_MISMATCH`.
+5. Envelope único (`OperationResult`) em todas as respostas; `requestId` vem de `X-Request-Id` ou é gerado.
+6. WebSocket: snapshots sintéticos ao conectar, eventos ao vivo, heartbeat de 30 s, backpressure com descarte de `project.log` e aviso `engine.notice`/`LOG_BACKPRESSURE`. Reconexão usa o histórico HTTP como cursor.
+7. Configuração do Engine persistida em `settings` (`engine.settings`): `batchConcurrency`, `logLevel`, `metricsIntervalMs`, `shutdownBehavior`. `keep-running` é rejeitado até existir logging desacoplado (processos ficariam sem supervisor e sem canal de log).
+8. `PUT /projects/:id` é parcial (merge + validação completa); projeto em execução retorna `ENGINE_BUSY`.
+9. `detect`/`import` são read-only quanto à pasta: leem `package.json`/lockfile e nunca executam script.
+10. Adicionados: código `ROUTE_NOT_FOUND`, evento `engine.notice` e a lista `DOMAIN_EVENT_TYPES` no contrato.
+
+**Alternativas consideradas:** Named Pipe já na Fase 3 (exigiria ACL nativa e complicaria testes); IPC via Tauri (acoplaria o Engine ao shell desktop).
+
+**Consequências:** o mesmo cliente serve para o desktop, CLI e testes automatizados. O token em `engine.json` exige que o diretório de dados seja do usuário (já é `%LOCALAPPDATA%`); ACL explícita e Named Pipe entram na Fase 6/7.
+
 ## ADR-013 — Política de recuperação e semântica de retry
 
 **Status:** Aceita (Fase 2)

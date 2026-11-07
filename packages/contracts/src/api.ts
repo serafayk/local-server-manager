@@ -60,10 +60,49 @@ export interface ProjectSummary {
   runtime: RuntimeSnapshot;
 }
 
+export interface EngineApiInfo {
+  host: string;
+  port: number;
+  baseUrl: string;
+  token: string;
+  websocketPath: string;
+}
+
 export interface EngineInfo {
   pid: number;
   protocolVersion: number;
   dataDir: string;
   startedAt: string;
   projects: number;
+  api: EngineApiInfo | null;
+}
+
+export interface DetectProjectRequest {
+  directory: string;
+}
+
+export interface DetectedScript {
+  name: string;
+  command: string;
+}
+
+export interface DetectProjectResponse {
+  directory: string;
+  hasPackageJson: boolean;
+  projectName: string | null;
+  scripts: DetectedScript[];
+  packageManager: 'npm' | 'pnpm' | 'yarn' | 'bun';
+  lockfile: string | null;
+  packageManagerConfirmed: boolean;
+}
+
+export interface ImportProjectRequest {
+  directory: string;
+  name?: string;
+  script?: string;
+  executable?: string;
+  args?: string[];
+  port?: number | null;
+  startOnBoot?: boolean;
+  environment?: Record<string, string>;
 }

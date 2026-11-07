@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, extname, isAbsolute, join, normalize } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, normalize } from 'node:path';
 import { AppError } from '@lsm/shared';
 import { resolveExecutable, type ResolveExecutableOptions } from './executable-resolver';
 
@@ -33,15 +33,49 @@ function findJsEntrypoints(shimPath: string, content: string): string[] {
   const tokens = content.match(/[^\s"'()<>|&]+\.(?:cjs|mjs|js)\b/gi) ?? [];
   const results: string[] = [];
   for (const token of tokens) {
-    const expanded = token.replace(/%~dp0/gi, `${shimDir}\\`).replace(/%dp0%/gi, `${shimDir}\\`);
+    // Shims costumam usar SET "VAR=%~dp0\...\cli.js"; descarta o prefixo VAR=.
+    const assignment = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/s.exec(token);
+    const raw = assignment?.[2] ?? token;
+    const expanded = raw.replace(/%~dp0/gi, `${shimDir}\\`).replace(/%dp0%/gi, `${shimDir}\\`);
     const candidate = isAbsolute(expanded)
       ? normalize(expanded)
       : normalize(join(shimDir, expanded));
-    if (!results.includes(candidate)) {
+    if (!results.includes(candidate) && existsSync(candidate)) {
       results.push(candidate);
     }
   }
-  return results.filter((candidate) => existsSync(candidate));
+  return results;
+}
+
+const PREFERRED_ENTRYPOINTS: Readonly<Record<PackageManager, readonly RegExp[]>> = {
+  npm: [/^npm-cli\.(?:c?js|mjs)$/i, /^npm\.(?:c?js|mjs)$/i],
+  pnpm: [/^pnpm\.(?:c?js|mjs)$/i],
+  yarn: [/^yarn\.(?:c?js|mjs)$/i],
+  bun: [/^bun\.(?:c?js|mjs)$/i],
+};
+
+/**
+ * Escolhe o entrypoint correto entre os arquivos referenciados pelo shim.
+ * Heurística explícita para não executar `npm-prefix.js` no lugar de
+ * `npm-cli.js` (ambos aparecem no mesmo shim).
+ */
+export function pickPackageManagerEntrypoint(
+  candidates: readonly string[],
+  packageManager: PackageManager,
+): string | null {
+  for (const pattern of PREFERRED_ENTRYPOINTS[packageManager]) {
+    const match = candidates.find((candidate) => pattern.test(basename(candidate)));
+    if (match) {
+      return match;
+    }
+  }
+  const cli = candidates.find(
+    (candidate) => /cli\.(?:c?js|mjs)$/i.test(basename(candidate)) && !/prefix/i.test(candidate),
+  );
+  if (cli) {
+    return cli;
+  }
+  return candidates.length > 0 ? (candidates[candidates.length - 1] as string) : null;
 }
 
 /**
@@ -86,11 +120,12 @@ export function resolvePackageManagerInvocation(
       content = '';
     }
     const entrypoints = findJsEntrypoints(resolved.executable, content);
+    const entrypoint = pickPackageManagerEntrypoint(entrypoints, packageManager);
 
-    if (entrypoints[0]) {
+    if (entrypoint !== null) {
       return {
         executable: nodeExecutable,
-        args: [entrypoints[0], 'run', script],
+        args: [entrypoint, 'run', script],
         mode: 'node-cli',
         packageManager,
         script,

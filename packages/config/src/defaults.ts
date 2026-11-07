@@ -1,10 +1,10 @@
 import type {
+  EngineSettings,
   HealthCheckConfig,
   LoggingConfig,
   RestartPolicy,
   ShutdownConfig,
 } from '@lsm/contracts';
-import type { LogLevel } from '@lsm/shared';
 
 /** docs/04-PROCESS-LIFECYCLE.md §4 — jitter desligado por padrão em ambiente local. */
 export const DEFAULT_RESTART_POLICY: RestartPolicy = {
@@ -44,16 +44,7 @@ export const DEFAULT_SHUTDOWN: ShutdownConfig = {
 /** Limite de concorrência para operações em lote. */
 export const DEFAULT_BATCH_CONCURRENCY = 4;
 
-export interface EngineSettings {
-  /**
-   * ADR-008: no encerramento explícito do Engine os projetos são parados de
-   * forma graciosa. Fechar a UI nunca para projetos.
-   */
-  shutdownBehavior: 'stop-all' | 'keep-running';
-  batchConcurrency: number;
-  logLevel: LogLevel;
-  metricsIntervalMs: number;
-}
+export { type EngineSettings };
 
 export const DEFAULT_ENGINE_SETTINGS: EngineSettings = {
   shutdownBehavior: 'stop-all',

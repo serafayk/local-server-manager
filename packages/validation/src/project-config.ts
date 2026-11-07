@@ -294,3 +294,63 @@ export function parseProjectConfig(input: unknown): ProjectConfig {
 }
 
 export const CONFIG_SCHEMA_VERSION = CURRENT_CONFIG_SCHEMA_VERSION;
+
+/**
+ * Atualização parcial de projeto (PUT). Campos aninhados são mesclados com a
+ * configuração atual e o resultado passa pela validação completa — assim uma
+ * atualização nunca produz configuração inválida nem apaga defaults.
+ */
+export const updateProjectRequestSchema = z.strictObject({
+  name: projectNameSchema.optional(),
+  description: z.string().trim().max(2_000).nullable().optional(),
+  groupId: z.string().trim().min(1).max(64).nullable().optional(),
+  workingDirectory: workingDirectorySchema.optional(),
+  runtime: runtimeConfigSchema.optional(),
+  environment: z.record(z.string(), z.string().max(8_192)).optional(),
+  port: z.number().int().min(1).max(65_535).nullable().optional(),
+  portSource: z.enum(PORT_SOURCES).optional(),
+  enabled: z.boolean().optional(),
+  startOnBoot: z.boolean().optional(),
+  startupOrder: z.number().int().min(0).max(10_000).optional(),
+  restartPolicy: z.record(z.string(), z.unknown()).optional(),
+  healthCheck: z.record(z.string(), z.unknown()).optional(),
+  logging: z.record(z.string(), z.unknown()).optional(),
+  shutdown: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type ParsedUpdateProjectRequest = z.output<typeof updateProjectRequestSchema>;
+
+export function parseUpdateProjectRequest(
+  existing: ProjectConfig,
+  input: unknown,
+  updatedAt: string,
+): ProjectConfig {
+  const patch = parseOrThrow(updateProjectRequestSchema, input, 'atualização de projeto');
+
+  const merged: Record<string, unknown> = { ...existing, updatedAt };
+  if (patch.name !== undefined) merged.name = patch.name;
+  if (patch.description !== undefined) merged.description = patch.description;
+  if (patch.groupId !== undefined) merged.groupId = patch.groupId;
+  if (patch.workingDirectory !== undefined) merged.workingDirectory = patch.workingDirectory;
+  if (patch.runtime !== undefined) merged.runtime = patch.runtime;
+  if (patch.environment !== undefined) merged.environment = patch.environment;
+  if (patch.port !== undefined) merged.port = patch.port;
+  if (patch.portSource !== undefined) merged.portSource = patch.portSource;
+  if (patch.enabled !== undefined) merged.enabled = patch.enabled;
+  if (patch.startOnBoot !== undefined) merged.startOnBoot = patch.startOnBoot;
+  if (patch.startupOrder !== undefined) merged.startupOrder = patch.startupOrder;
+  if (patch.restartPolicy !== undefined) {
+    merged.restartPolicy = { ...existing.restartPolicy, ...patch.restartPolicy };
+  }
+  if (patch.healthCheck !== undefined) {
+    merged.healthCheck = { ...existing.healthCheck, ...patch.healthCheck };
+  }
+  if (patch.logging !== undefined) {
+    merged.logging = { ...existing.logging, ...patch.logging };
+  }
+  if (patch.shutdown !== undefined) {
+    merged.shutdown = { ...existing.shutdown, ...patch.shutdown };
+  }
+
+  return parseProjectConfig(merged);
+}

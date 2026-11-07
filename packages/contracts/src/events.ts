@@ -23,6 +23,7 @@ export interface SystemMetricsPayload {
 export interface DomainEventPayloads {
   'engine.ready': { pid: number; dataDir: string; startedAt: string };
   'engine.shutdown': { reason: string };
+  'engine.notice': { level: 'info' | 'warn' | 'error'; message: string; code?: string };
   'project.created': { projectId: string; name: string };
   'project.updated': { projectId: string; name: string };
   'project.deleted': { projectId: string; name: string };
@@ -61,6 +62,27 @@ export interface DomainEventPayloads {
 }
 
 export type DomainEventType = keyof DomainEventPayloads;
+
+/** Lista em runtime para assinatura/broadcast (WebSocket). */
+export const DOMAIN_EVENT_TYPES = [
+  'engine.ready',
+  'engine.shutdown',
+  'engine.notice',
+  'project.created',
+  'project.updated',
+  'project.deleted',
+  'project.state.changed',
+  'project.process.started',
+  'project.process.exited',
+  'project.crashed',
+  'project.restart.scheduled',
+  'project.restart.started',
+  'project.recovery.exhausted',
+  'project.health.changed',
+  'project.log',
+  'project.metrics',
+  'system.metrics',
+] as const satisfies readonly DomainEventType[];
 
 export interface DomainEvent<K extends DomainEventType = DomainEventType> {
   eventId: string;

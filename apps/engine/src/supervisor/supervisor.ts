@@ -32,8 +32,15 @@ export interface SupervisorDeps {
  */
 export class Supervisor {
   private readonly registry = new RuntimeRegistry();
+  private batchConcurrency: number;
 
-  constructor(private readonly deps: SupervisorDeps) {}
+  constructor(private readonly deps: SupervisorDeps) {
+    this.batchConcurrency = deps.batchConcurrency;
+  }
+
+  setBatchConcurrency(value: number): void {
+    this.batchConcurrency = Math.max(1, Math.min(32, Math.floor(value)));
+  }
 
   registerProject(config: ProjectConfig): void {
     const existing = this.registry.get(config.id);
@@ -111,7 +118,7 @@ export class Supervisor {
 
   async startProjects(
     projectIds: readonly string[],
-    concurrency = this.deps.batchConcurrency,
+    concurrency = this.batchConcurrency,
   ): Promise<BulkProjectResult[]> {
     return runWithConcurrency(projectIds, concurrency, async (projectId) => {
       try {
@@ -125,7 +132,7 @@ export class Supervisor {
 
   async stopProjects(
     projectIds: readonly string[],
-    concurrency = this.deps.batchConcurrency,
+    concurrency = this.batchConcurrency,
   ): Promise<BulkProjectResult[]> {
     return runWithConcurrency(projectIds, concurrency, async (projectId) => {
       try {
@@ -160,7 +167,7 @@ export class Supervisor {
   /** ADR-008: encerramento explícito do Engine para todos os projetos. */
   async shutdown(): Promise<void> {
     const runtimes = this.registry.list();
-    await runWithConcurrency(runtimes, this.deps.batchConcurrency, async (runtime) => {
+    await runWithConcurrency(runtimes, this.batchConcurrency, async (runtime) => {
       await runtime.dispose();
     });
   }

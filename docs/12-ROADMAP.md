@@ -5,7 +5,8 @@
 - **Fase 0 — concluída:** monorepo pnpm, TypeScript strict, ESLint/Prettier, Vitest, contratos, validação, configuração, banco, adaptadores Windows e CI.
 - **Fase 1 — concluída:** bootstrap do Engine, instância única, SQLite + migrações, cadastro/listagem/remoção, `spawn` sem shell, supervisor com máquina de estados, logs JSONL e CLI de desenvolvimento.
 - **Fase 2 — concluída:** recovery com backoff/retry budget/cooldown de estabilidade, reconciliação segura de órfãos no boot, bloqueio de `startOnBoot` com órfão comprovado e retenção de logs.
-- **Próxima:** Fase 3 (API HTTP/WebSocket local), mantendo a UI para a Fase 4.
+- **Fase 3 — concluída:** API HTTP local autenticada, rotas de projetos/lote/logs/eventos/settings, `detect`/`import` de pasta, WebSocket com snapshots, heartbeat e backpressure, protocolo versionado.
+- **Próxima:** Fase 4 (desktop Tauri) — instalar Rust/MSVC/WebView2 e validar o sidecar do Engine.
 
 Detalhes de execução, comandos e limitações: [15-DEVELOPMENT.md](15-DEVELOPMENT.md) e `CHANGELOG.md`.
 

@@ -28,6 +28,12 @@ Considerar Job Objects para vincular processos descendentes à instância gerenc
 
 ## 5. Segurança da comunicação
 
+> **Implementado na Fase 3 (ADR-014):** HTTP em `127.0.0.1` com porta efêmera,
+> token de 32 bytes por execução publicado em `engine/engine.json`, comparação
+> em tempo constante, validação de `Host` (anti DNS rebinding), CORS por
+> allowlist, corpo máximo de 1 MB e WebSocket autenticado. Named Pipe com ACL
+> continua como evolução.
+
 - Preferir Named Pipe com ACL para usuário atual.
 - Se usar HTTP, bind somente em `127.0.0.1`.
 - Token aleatório por instalação/execução, armazenado com proteção adequada.

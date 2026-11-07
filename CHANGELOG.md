@@ -2,6 +2,27 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.3.0] — 2026-11-07
+
+### Fase 3 — API local e comunicação
+
+- Servidor HTTP em `127.0.0.1` com porta efêmera, token de 32 bytes por execução e comparação em tempo constante.
+- Descoberta pelo desktop via `engine/engine.json` (`host`, `port`, `baseUrl`, `token`, `websocketPath`).
+- Proteções: validação de `Host` (DNS rebinding), CORS por allowlist, corpo máximo de 1 MB, `nosniff`, `no-store`, sem stack trace na resposta.
+- Envelope `OperationResult` em todas as rotas; `requestId` de `X-Request-Id` ou gerado.
+- Rotas: health, info, CRUD de projetos, start/stop/restart/status, logs, eventos, lote, settings, `detect` e `import` de pasta.
+- `PUT /projects/:id` parcial com revalidação completa; projeto em execução retorna `ENGINE_BUSY`.
+- WebSocket `/api/v1/ws`: snapshots ao conectar, eventos ao vivo, heartbeat de 30 s, backpressure com descarte de `project.log` e aviso `engine.notice`.
+- Protocolo versionado (`/api/v1` + `X-Protocol-Version`).
+- Configuração do Engine persistida (`batchConcurrency`, `logLevel`, `metricsIntervalMs`, `shutdownBehavior`); `keep-running` rejeitado até haver logging desacoplado.
+- Novos contratos: `engine.notice`, `DOMAIN_EVENT_TYPES`, `ROUTE_NOT_FOUND`, `EngineApiInfo`, DTOs de detecção/importação.
+- Correção no resolvedor de package manager: prefere `npm-cli.js` a `npm-prefix.js` em shims npm e descarta prefixos `VAR=`.
+- 38 novos testes; total de 174.
+
+### Limitações desta versão
+
+- Named Pipe, health check, métricas, portas e desktop continuam pendentes (Fases 4–7).
+
 ## [0.2.0] — 2026-11-07
 
 ### Fase 2 — Resiliência

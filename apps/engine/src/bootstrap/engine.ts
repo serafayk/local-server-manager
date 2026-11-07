@@ -1,5 +1,11 @@
 import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
-import { PROTOCOL_VERSION, type EngineInfo } from '@lsm/contracts';
+import {
+  PROTOCOL_VERSION,
+  ENGINE_SETTINGS_KEY,
+  type EngineApiInfo,
+  type EngineInfo,
+  type EngineSettings,
+} from '@lsm/contracts';
 import { DEFAULT_ENGINE_SETTINGS, resolveAppPaths, type AppPaths } from '@lsm/config';
 import {
   createRepositories,
@@ -10,6 +16,10 @@ import {
 } from '@lsm/database';
 import type { Clock, Logger, TimerHandle } from '@lsm/shared';
 import { createFileSink, createLogger, createStreamSink, createSystemClock } from '@lsm/shared';
+import { AppError } from '@lsm/shared';
+import { parseEngineSettings } from '@lsm/validation';
+import { createApiServer, type ApiServer } from '../api/server';
+import { generateApiToken } from '../api/auth';
 import { EventBus } from '../core/event-bus';
 import { LogManager } from '../log-manager/log-manager';
 import { runLogRetention } from '../log-manager/log-retention';
@@ -97,6 +107,9 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
   let started = false;
   let shuttingDown = false;
   let retentionTimer: TimerHandle | null = null;
+  let apiServer: ApiServer | null = null;
+  let apiInfo: EngineApiInfo | null = null;
+  let engineSettings: EngineSettings = DEFAULT_ENGINE_SETTINGS;
 
   const runRetention = (): void => {
     try {
@@ -162,11 +175,50 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
           });
         }
 
+        const storedSettings = repositories.settings.get<unknown>(ENGINE_SETTINGS_KEY);
+        if (storedSettings !== null) {
+          try {
+            engineSettings = parseEngineSettings(storedSettings);
+          } catch (error) {
+            logger.warn('Configuração do Engine inválida no banco; usando padrões', {}, error);
+            engineSettings = DEFAULT_ENGINE_SETTINGS;
+          }
+        }
+        supervisor.setBatchConcurrency(engineSettings.batchConcurrency);
+
         for (const config of repositories.projects.list()) {
           supervisor.registerProject(config);
         }
 
         const reconciliation = await reconcileInstances({ repositories, clock, logger });
+
+        apiServer = createApiServer({
+          token: generateApiToken(),
+          supervisor,
+          projects,
+          repositories,
+          logManager,
+          events,
+          clock,
+          logger,
+          engineInfo: () => engine.info(),
+          getSettings: () => engineSettings,
+          updateSettings: (input: unknown): EngineSettings => {
+            if (input === null || typeof input !== 'object' || Array.isArray(input)) {
+              throw new AppError('VALIDATION_ERROR', 'Configuração do Engine deve ser um objeto');
+            }
+            const merged = parseEngineSettings({
+              ...engineSettings,
+              ...(input as Record<string, unknown>),
+            });
+            repositories.settings.set(ENGINE_SETTINGS_KEY, merged);
+            engineSettings = merged;
+            supervisor.setBatchConcurrency(merged.batchConcurrency);
+            logger.info('Configuração do Engine atualizada', { ...merged });
+            return merged;
+          },
+        });
+        apiInfo = await apiServer.start();
 
         startedAt = clock.nowIso();
         writeFileSync(paths.engineInfoFile, `${JSON.stringify(engine.info(), null, 2)}\n`, 'utf8');
@@ -198,6 +250,9 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
         await supervisor.startBootProjects(new Set(reconciliation.blockedProjectIds));
       } catch (error) {
         started = false;
+        await apiServer?.stop().catch(() => undefined);
+        apiServer = null;
+        apiInfo = null;
         await lock?.release().catch(() => undefined);
         lock = null;
         throw error;
@@ -222,6 +277,12 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
           metadata: { reason },
         });
         logger.info('Encerrando Engine', { reason });
+        // Para de aceitar comandos antes de mexer nos projetos (docs/03 §10).
+        await apiServer?.stop().catch((error: unknown) => {
+          logger.warn('Falha ao encerrar API local', {}, error);
+        });
+        apiServer = null;
+        apiInfo = null;
         await supervisor.shutdown();
         await logManager.closeAll();
       } finally {
@@ -248,6 +309,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
         dataDir: paths.root,
         startedAt: startedAt ?? clock.nowIso(),
         projects: supervisor.listProjects().length,
+        api: apiInfo,
       };
     },
   };

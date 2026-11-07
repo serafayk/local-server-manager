@@ -1,4 +1,4 @@
-# 15 — Desenvolvimento, execução e limitações (Fases 1–2)
+# 15 — Desenvolvimento, execução e limitações (Fases 1–3)
 
 > Documento operacional. A especificação continua em `01`–`14`.
 
@@ -97,17 +97,63 @@ tests/
 - **Retenção de logs** por projeto (`logging.retentionDays`), executada no boot e a cada 6 h, protegendo arquivos de instâncias ativas.
 - 136 testes no total (34 novos nesta fase).
 
-## 6. Limitações conhecidas (Fase 3+)
+## 6. API local (Fase 3)
+
+O Engine sobe uma API HTTP em `127.0.0.1` com porta efêmera e token por
+execução. Os dados ficam em `engine/engine.json`:
+
+```json
+{
+  "pid": 1234,
+  "protocolVersion": 1,
+  "dataDir": "C:\\Users\\<user>\\AppData\\Local\\LocalServerManager",
+  "startedAt": "2026-11-07T20:00:00.000Z",
+  "projects": 2,
+  "api": {
+    "host": "127.0.0.1",
+    "port": 54321,
+    "baseUrl": "http://127.0.0.1:54321",
+    "token": "<token>",
+    "websocketPath": "/api/v1/ws"
+  }
+}
+```
+
+```powershell
+$engine = Get-Content "$env:LOCALAPPDATA\LocalServerManager\engine\engine.json" | ConvertFrom-Json
+$headers = @{ Authorization = "Bearer $($engine.api.token)" }
+
+Invoke-RestMethod "$($engine.api.baseUrl)/api/v1/health" -Headers $headers
+Invoke-RestMethod "$($engine.api.baseUrl)/api/v1/projects" -Headers $headers
+
+$body = @{
+  name = 'Demo'
+  workingDirectory = 'C:\dev\demo'
+  runtime = @{ executable = 'node'; args = @('server.js') }
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod "$($engine.api.baseUrl)/api/v1/projects" -Method Post `
+  -Headers $headers -ContentType 'application/json' -Body $body
+```
+
+Regras de segurança: somente loopback, `Host` validado, CORS por allowlist,
+token comparado em tempo constante, corpo máximo de 1 MB, sem stack trace na
+resposta. Detalhes e rotas em [06-API-CONTRACTS.md](06-API-CONTRACTS.md) e
+ADR-014.
+
+## 7. Limitações conhecidas (Fase 4+)
 
 1. **Sem adoção/limpeza de órfão** — a reconciliação bloqueia o boot e registra o PID; matar um órfão comprovado é ação manual até os Job Objects (Fase 7).
-2. **Sem health check, portas e métricas** — Fase 5.
-3. **Sem API HTTP/WebSocket** — Fase 3; a CLI roda o Engine no próprio processo.
-4. **Sem interface desktop** — Fase 4.
-5. **Empacotamento do Engine como sidecar Tauri** — será validado antes da Fase 4.
-6. **Stop no Windows é forçado** — janela cooperativa curta (ADR-011); Job Objects na Fase 7.
-7. **Retenção não tem limite global de disco** — hoje é por projeto/dias; limite global entra junto da UI de configurações.
+2. **Sem health check, portas e métricas** — Fase 5; rotas reservadas.
+3. **Sem Named Pipe** — o transporte atual é HTTP loopback autenticado (ADR-014).
+4. **`shutdownBehavior=keep-running` não suportado** — exigiria logging desacoplado; a API responde `VALIDATION_ERROR`.
+5. **Sem interface desktop** — Fase 4.
+6. **Empacotamento do Engine como sidecar Tauri** — será validado antes da Fase 4.
+7. **Token em `engine.json`** — protegido apenas pela ACL do perfil do usuário até a Fase 6.
+8. **Stop no Windows é forçado** — janela cooperativa curta (ADR-011).
+9. **Retenção sem limite global de disco** — hoje é por projeto/dias.
 
-## 7. Dados e privacidade
+## 8. Dados e privacidade
 
 - Banco: `%LOCALAPPDATA%\LocalServerManager\data\manager.sqlite`
 - Logs de processo: `%LOCALAPPDATA%\LocalServerManager\logs\<projectId>\<instanceId>.log`
