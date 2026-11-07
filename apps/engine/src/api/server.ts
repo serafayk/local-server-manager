@@ -142,7 +142,7 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
         runtime = { executable: body.executable, args: body.args ?? [] };
       } else if (body.script !== undefined) {
         const invocation = resolvePackageManagerInvocation(
-          inspection.packageManager.packageManager,
+          body.packageManager ?? inspection.packageManager.packageManager,
           body.script,
           { cwd: body.directory },
         );
@@ -163,6 +163,12 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
         port: body.port ?? null,
         portSource: body.port !== null && body.port !== undefined ? 'fixed' : 'none',
         startOnBoot: body.startOnBoot ?? false,
+        enabled: body.enabled ?? true,
+        startupOrder: body.startupOrder ?? 0,
+        ...(body.restartPolicy !== undefined ? { restartPolicy: body.restartPolicy } : {}),
+        ...(body.healthCheck !== undefined ? { healthCheck: body.healthCheck } : {}),
+        ...(body.logging !== undefined ? { logging: body.logging } : {}),
+        ...(body.shutdown !== undefined ? { shutdown: body.shutdown } : {}),
       });
       return sendSuccess(reply, created, requestIdOf(request), 201);
     });
@@ -232,6 +238,26 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
         options.projects.listEvents({ projectId: config.id, limit }),
         requestIdOf(request),
       );
+    });
+
+    instance.get('/api/v1/projects/:id/instances', async (request, reply) => {
+      const config = options.projects.getProject(projectIdOf(request));
+      const limit = parsePositiveInt(queryOf(request).limit, 20, 1, 100);
+      const instances = options.repositories.instances
+        .listByProject(config.id, limit)
+        .map((row) => ({
+          id: row.id,
+          projectId: row.projectId,
+          pid: row.pid,
+          startedAt: row.startedAt,
+          endedAt: row.endedAt,
+          exitCode: row.exitCode,
+          exitSignal: row.exitSignal,
+          terminationReason: row.terminationReason,
+          status: row.status,
+          createdAt: row.createdAt,
+        }));
+      return sendSuccess(reply, instances, requestIdOf(request));
     });
 
     instance.get('/api/v1/events', async (request, reply) => {

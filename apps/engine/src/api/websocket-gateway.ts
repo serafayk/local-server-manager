@@ -1,4 +1,4 @@
-import type { DomainEvent } from '@lsm/contracts';
+import type { AnyDomainEvent } from '@lsm/contracts';
 import type { Logger } from '@lsm/shared';
 import type { EventBus } from '../core/event-bus';
 import type { Supervisor } from '../supervisor/supervisor';
@@ -111,7 +111,7 @@ export class WebSocketGateway {
     this.clients.clear();
   }
 
-  private broadcast(event: DomainEvent): void {
+  private broadcast(event: AnyDomainEvent): void {
     for (const client of this.clients) {
       if (client.socket.readyState !== 1) {
         this.clients.delete(client);
@@ -140,7 +140,7 @@ export class WebSocketGateway {
     }
   }
 
-  private send(client: Client, event: DomainEvent): void {
+  private send(client: Client, event: AnyDomainEvent): void {
     try {
       client.socket.send(JSON.stringify(event));
     } catch (error) {

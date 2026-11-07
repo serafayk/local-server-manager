@@ -1,4 +1,4 @@
-# 15 — Desenvolvimento, execução e limitações (Fases 1–3)
+# 15 — Desenvolvimento, execução e limitações (Fases 1–4a)
 
 > Documento operacional. A especificação continua em `01`–`14`.
 
@@ -17,9 +17,24 @@ pnpm typecheck     # tsc --noEmit em todo o workspace
 pnpm lint
 pnpm test          # Vitest (unitários + integração com processos reais)
 pnpm format:check
-pnpm build         # bundles do Engine em apps/engine/dist
+pnpm build         # bundles do Engine + build da UI
 pnpm check         # lint + typecheck + test + build
 ```
+
+### Desktop (navegador, Fase 4a)
+
+```powershell
+# terminal 1
+pnpm engine
+
+# terminal 2
+pnpm desktop
+# abre http://localhost:1420
+```
+
+O Vite lê `engine/engine.json` em `/__engine` para descobrir porta e token.
+Se o Engine reiniciar, recarregue a página. `LSM_DATA_DIR` deve apontar para a
+mesma pasta nos dois processos quando usada.
 
 ### Engine em background (após build)
 
@@ -141,19 +156,47 @@ token comparado em tempo constante, corpo máximo de 1 MB, sem stack trace na
 resposta. Detalhes e rotas em [06-API-CONTRACTS.md](06-API-CONTRACTS.md) e
 ADR-014.
 
-## 7. Limitações conhecidas (Fase 4+)
+## 7. Desktop (Fase 4a)
 
-1. **Sem adoção/limpeza de órfão** — a reconciliação bloqueia o boot e registra o PID; matar um órfão comprovado é ação manual até os Job Objects (Fase 7).
-2. **Sem health check, portas e métricas** — Fase 5; rotas reservadas.
-3. **Sem Named Pipe** — o transporte atual é HTTP loopback autenticado (ADR-014).
-4. **`shutdownBehavior=keep-running` não suportado** — exigiria logging desacoplado; a API responde `VALIDATION_ERROR`.
-5. **Sem interface desktop** — Fase 4.
-6. **Empacotamento do Engine como sidecar Tauri** — será validado antes da Fase 4.
-7. **Token em `engine.json`** — protegido apenas pela ACL do perfil do usuário até a Fase 6.
-8. **Stop no Windows é forçado** — janela cooperativa curta (ADR-011).
-9. **Retenção sem limite global de disco** — hoje é por projeto/dias.
+Estrutura de `apps/desktop`:
 
-## 8. Dados e privacidade
+```text
+src/
+  lib/        api.ts (cliente tipado), socket.ts (WS+reconexão), payload.ts
+              (form <-> API), logs.ts (merge/filtro), format.ts
+  stores/     app-store.ts (conexão + buffer de logs ao vivo)
+  providers/  engine-provider.tsx (descoberta, cliente, socket)
+  components/ layout, tabela, formulário em 3 etapas, LogViewer virtualizado
+  pages/      dashboard, projetos, detalhes, logs, eventos, configurações
+```
+
+- **Descoberta:** em dev o Vite publica `/__engine`; no shell Tauri, o app lerá
+  `window.__LSM_ENGINE__` (mesmo formato) via comando nativo.
+- **Tempo real:** eventos WS atualizam o React Query e o buffer de logs;
+  reconexão recarrega as consultas.
+- **Logs:** histórico HTTP + fluxo ao vivo mesclados por `sequence`; lista
+  virtualizada; filtros por stream e texto; auto-scroll opcional.
+- **Cadastro:** 3 etapas (Projeto → Comando → Execução), com detecção read-only
+  de `package.json`/lockfile e revisão do comando final.
+- **Estados:** conexão, carregamento, vazio e erro são explícitos; ações
+  destrutivas pedem confirmação; botões desabilitados explicam o motivo.
+
+Testes da UI: `apps/desktop/src/**/*.test.{ts,tsx}` (Vitest + Testing Library,
+jsdom por arquivo). O fluxo real foi validado no navegador contra o Engine
+compilado: iniciar, logs ao vivo, parar e auditoria.
+
+## 8. Limitações conhecidas (Fase 4b+)
+
+1. **Shell Tauri pendente** — Rust/Cargo não estão instalados; faltam janela nativa, tray, sidecar e injeção de `window.__LSM_ENGINE__`.
+2. **Sem adoção/limpeza de órfão** — a reconciliação bloqueia o boot e registra o PID; matar um órfão comprovado é ação manual até os Job Objects (Fase 7).
+3. **Sem health check, portas e métricas** — Fase 5; a aba de métricas e os campos de health existem, mas a execução não.
+4. **Sem Named Pipe** — o transporte atual é HTTP loopback autenticado (ADR-014).
+5. **`shutdownBehavior=keep-running` não suportado** — exigiria logging desacoplado; a API responde `VALIDATION_ERROR`.
+6. **Token em `engine.json`** — protegido apenas pela ACL do perfil do usuário até a Fase 6.
+7. **Stop no Windows é forçado** — janela cooperativa curta (ADR-011).
+8. **Retenção sem limite global de disco** — hoje é por projeto/dias.
+
+## 9. Dados e privacidade
 
 - Banco: `%LOCALAPPDATA%\LocalServerManager\data\manager.sqlite`
 - Logs de processo: `%LOCALAPPDATA%\LocalServerManager\logs\<projectId>\<instanceId>.log`

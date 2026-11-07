@@ -7,7 +7,7 @@ import type {
   RuntimeConfig,
   ShutdownConfig,
 } from './config';
-import type { RuntimeSnapshot } from './domain';
+import type { RuntimeSnapshot, ProjectStatus } from './domain';
 
 /**
  * DTOs de entrada da API local (Fase 3). A Fase 1 já usa os mesmos formatos
@@ -100,9 +100,30 @@ export interface ImportProjectRequest {
   directory: string;
   name?: string;
   script?: string;
+  packageManager?: 'npm' | 'pnpm' | 'yarn' | 'bun';
   executable?: string;
   args?: string[];
   port?: number | null;
   startOnBoot?: boolean;
   environment?: Record<string, string>;
+  enabled?: boolean;
+  startupOrder?: number;
+  restartPolicy?: Partial<RestartPolicy>;
+  healthCheck?: Partial<HealthCheckConfig>;
+  logging?: Partial<LoggingConfig>;
+  shutdown?: Partial<ShutdownConfig>;
+}
+
+/** Instância de processo exposta pela API (histórico). */
+export interface ProjectInstance {
+  id: string;
+  projectId: string;
+  pid: number | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  exitCode: number | null;
+  exitSignal: string | null;
+  terminationReason: string | null;
+  status: ProjectStatus;
+  createdAt: string;
 }

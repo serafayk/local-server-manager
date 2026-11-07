@@ -12,11 +12,18 @@ export const importProjectRequestSchema = z.strictObject({
   directory: workingDirectorySchema,
   name: projectNameSchema.optional(),
   script: z.string().regex(SCRIPT_NAME_PATTERN, 'nome de script inválido').optional(),
+  packageManager: z.enum(['npm', 'pnpm', 'yarn', 'bun']).optional(),
   executable: z.string().trim().min(1).max(1_024).optional(),
   args: z.array(z.string().max(8_192)).max(64).optional(),
   port: z.number().int().min(1).max(65_535).nullable().optional(),
   startOnBoot: z.boolean().optional(),
   environment: z.record(z.string(), z.string().max(8_192)).optional(),
+  enabled: z.boolean().optional(),
+  startupOrder: z.number().int().min(0).max(10_000).optional(),
+  restartPolicy: z.record(z.string(), z.unknown()).optional(),
+  healthCheck: z.record(z.string(), z.unknown()).optional(),
+  logging: z.record(z.string(), z.unknown()).optional(),
+  shutdown: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const bulkProjectsRequestSchema = z.strictObject({

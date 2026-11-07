@@ -2,6 +2,27 @@
 
 Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicionadas no topo com data, contexto, decisão, alternativas e consequências.
 
+## ADR-015 — Interface desktop: SPA React + cliente tipado (Fase 4a)
+
+**Status:** Aceita (Fase 4a; shell Tauri pendente)
+
+**Contexto:** O shell Tauri exige Rust/Cargo, que não estão instalados na máquina de desenvolvimento. A UI, o cliente da API e os fluxos podem ser entregues e validados sem o shell, contra o Engine real no navegador.
+
+**Decisão:**
+
+1. Interface como SPA React 19 + Vite 8 + Tailwind 4, em `apps/desktop`.
+2. Estado do servidor com React Query; logs ao vivo em um buffer Zustand limitado a 2.000 linhas (histórico continua no HTTP/arquivo).
+3. `HashRouter` para funcionar tanto no Vite quanto no protocolo customizado do Tauri.
+4. Descoberta do Engine em desenvolvimento via middleware do Vite (`/__engine` lê `engine.json`). Em produção, o shell Tauri injetará `window.__LSM_ENGINE__` com os mesmos campos.
+5. Componentes de UI próprios (Button, Card, Badge, Dialog, Field, Tabs) em vez do gerador shadcn/ui, para evitar dependência de geração e manter a superfície pequena.
+6. O desktop importa apenas `@lsm/contracts` (tipos puros). `@lsm/config` e `@lsm/shared` não entram no bundle do browser porque dependem de APIs Node.
+7. Eventos WebSocket atualizam o cache do React Query (`project.state.changed`) e o buffer de logs; reconexão invalida consultas. O histórico é mesclado por `sequence` para não duplicar linhas.
+8. Segredos de ambiente aparecem mascarados; o token da API nunca é renderizado.
+
+**Alternativas consideradas:** Electron (descartado pelo ADR-003); shadcn/ui via CLI (mais arquivos e dependências do que o necessário nesta fase).
+
+**Consequências:** a Fase 4 pode ser validada no navegador com o Engine real e testes de componente. Falta apenas o shell `src-tauri` (janela, tray, sidecar do Engine e injeção do endpoint), que entra assim que Rust estiver disponível.
+
 ## ADR-014 — API local HTTP + WebSocket para o desktop
 
 **Status:** Aceita (Fase 3)

@@ -2,6 +2,29 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.4.0] — 2026-11-07
+
+### Fase 4a — Interface desktop (SPA)
+
+- App React 19 + Vite 8 + Tailwind 4 em `apps/desktop`, tema escuro e layout com sidebar.
+- Cliente tipado da API com envelope, `ApiError` estável e autenticação por token.
+- Descoberta do Engine em desenvolvimento via `/__engine` (Vite lê `engine.json`); produção prevista via `window.__LSM_ENGINE__` (shell Tauri).
+- WebSocket com reconexão exponencial; eventos atualizam o React Query e o buffer de logs.
+- Dashboard com indicadores, tabela de projetos e ações rápidas.
+- Projetos com busca, filtro por estado, seleção múltipla, start/stop em lote e remoção confirmada.
+- Cadastro em 3 etapas (Projeto → Comando → Execução) com detecção de `package.json`/lockfile, ambiente, porta, políticas e revisão do comando.
+- Detalhes com abas Visão geral, Logs, Configuração, Histórico e Métricas (reservada).
+- Logs virtualizados mergendo histórico HTTP + fluxo ao vivo por `sequence`, com filtros e auto-scroll.
+- Eventos com filtros por projeto, nível e limite.
+- Configurações do Engine (concorrência, log level, métricas) com nota sobre `shutdownBehavior`.
+- Estados explícitos de conexão/carregamento/vazio/erro; ações destrutivas com confirmação; segredos mascarados.
+- Rota `GET /projects/:id/instances` e suporte a políticas no `POST /projects/import`.
+- 39 novos testes de UI (componentes, cliente, formulário, logs, store); total de 213.
+
+### Limitações desta versão
+
+- Shell Tauri (`src-tauri`) pendente por ausência de Rust/Cargo; tray, janela nativa e sidecar ficam para a Fase 4b.
+
 ## [0.3.0] — 2026-11-07
 
 ### Fase 3 — API local e comunicação

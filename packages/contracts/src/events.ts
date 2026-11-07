@@ -92,3 +92,11 @@ export interface DomainEvent<K extends DomainEventType = DomainEventType> {
   projectId?: string;
   payload: DomainEventPayloads[K];
 }
+
+/**
+ * União discriminada por `type`, para consumidores que fazem switch e
+ * precisam do payload correlacionado.
+ */
+export type AnyDomainEvent = {
+  [K in DomainEventType]: DomainEvent<K>;
+}[DomainEventType];

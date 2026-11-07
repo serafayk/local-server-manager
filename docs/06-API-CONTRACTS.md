@@ -45,31 +45,32 @@ gerado pelo Engine. Não retornar stack trace; o stack completo fica no log inte
 
 ## 4. Rotas
 
-| Método | Rota                           | Finalidade                                 |
-| ------ | ------------------------------ | ------------------------------------------ |
-| GET    | `/api/v1/health`               | Saúde do Engine                            |
-| GET    | `/api/v1/info`                 | Informações + endpoint da API              |
-| GET    | `/api/v1/projects`             | Listar projetos (com runtime)              |
-| POST   | `/api/v1/projects`             | Criar projeto                              |
-| POST   | `/api/v1/projects/detect`      | Ler `package.json`/lockfile                |
-| POST   | `/api/v1/projects/import`      | Criar a partir de uma pasta                |
-| GET    | `/api/v1/projects/:id`         | Detalhar                                   |
-| PUT    | `/api/v1/projects/:id`         | Atualizar (parcial, mesclado)              |
-| DELETE | `/api/v1/projects/:id`         | Remover cadastro                           |
-| POST   | `/api/v1/projects/:id/start`   | Iniciar                                    |
-| POST   | `/api/v1/projects/:id/stop`    | Parar                                      |
-| POST   | `/api/v1/projects/:id/restart` | Reiniciar                                  |
-| GET    | `/api/v1/projects/:id/status`  | Estado atual                               |
-| GET    | `/api/v1/projects/:id/logs`    | Histórico de logs (`?tail`, `?instanceId`) |
-| GET    | `/api/v1/projects/:id/events`  | Histórico de eventos                       |
-| GET    | `/api/v1/events`               | Histórico global (`?projectId`)            |
-| POST   | `/api/v1/bulk/start`           | Iniciar selecionados                       |
-| POST   | `/api/v1/bulk/stop`            | Parar selecionados                         |
-| GET    | `/api/v1/settings`             | Configuração do Engine                     |
-| PUT    | `/api/v1/settings`             | Atualiza configuração                      |
-| GET    | `/api/v1/ws`                   | WebSocket de eventos                       |
-| GET    | `/api/v1/system/metrics`       | Métricas globais (Fase 5)                  |
-| GET    | `/api/v1/ports/:port`          | Ocupação de porta (Fase 5)                 |
+| Método | Rota                             | Finalidade                                 |
+| ------ | -------------------------------- | ------------------------------------------ |
+| GET    | `/api/v1/health`                 | Saúde do Engine                            |
+| GET    | `/api/v1/info`                   | Informações + endpoint da API              |
+| GET    | `/api/v1/projects`               | Listar projetos (com runtime)              |
+| POST   | `/api/v1/projects`               | Criar projeto                              |
+| POST   | `/api/v1/projects/detect`        | Ler `package.json`/lockfile                |
+| POST   | `/api/v1/projects/import`        | Criar a partir de uma pasta                |
+| GET    | `/api/v1/projects/:id`           | Detalhar                                   |
+| PUT    | `/api/v1/projects/:id`           | Atualizar (parcial, mesclado)              |
+| DELETE | `/api/v1/projects/:id`           | Remover cadastro                           |
+| POST   | `/api/v1/projects/:id/start`     | Iniciar                                    |
+| POST   | `/api/v1/projects/:id/stop`      | Parar                                      |
+| POST   | `/api/v1/projects/:id/restart`   | Reiniciar                                  |
+| GET    | `/api/v1/projects/:id/status`    | Estado atual                               |
+| GET    | `/api/v1/projects/:id/logs`      | Histórico de logs (`?tail`, `?instanceId`) |
+| GET    | `/api/v1/projects/:id/events`    | Histórico de eventos                       |
+| GET    | `/api/v1/projects/:id/instances` | Histórico de instâncias                    |
+| GET    | `/api/v1/events`                 | Histórico global (`?projectId`)            |
+| POST   | `/api/v1/bulk/start`             | Iniciar selecionados                       |
+| POST   | `/api/v1/bulk/stop`              | Parar selecionados                         |
+| GET    | `/api/v1/settings`               | Configuração do Engine                     |
+| PUT    | `/api/v1/settings`               | Atualiza configuração                      |
+| GET    | `/api/v1/ws`                     | WebSocket de eventos                       |
+| GET    | `/api/v1/system/metrics`         | Métricas globais (Fase 5)                  |
+| GET    | `/api/v1/ports/:port`            | Ocupação de porta (Fase 5)                 |
 
 `PUT /projects/:id` é uma atualização parcial: campos ausentes preservam o
 valor atual e o resultado passa pela validação completa. Projeto em execução

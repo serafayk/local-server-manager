@@ -1,4 +1,9 @@
-import type { DomainEvent, DomainEventPayloads, DomainEventType } from '@lsm/contracts';
+import type {
+  AnyDomainEvent,
+  DomainEvent,
+  DomainEventPayloads,
+  DomainEventType,
+} from '@lsm/contracts';
 import { PROTOCOL_VERSION } from '@lsm/contracts';
 import type { Clock, Logger } from '@lsm/shared';
 import { newId } from '@lsm/shared';
@@ -34,10 +39,10 @@ export class EventBus {
   }
 
   /** Assina todos os eventos (usado pelo gateway WebSocket). */
-  onAny(handler: (event: DomainEvent) => void): Unsubscribe {
-    this.anyHandlers.add(handler);
+  onAny(handler: (event: AnyDomainEvent) => void): Unsubscribe {
+    this.anyHandlers.add(handler as unknown as AnyHandler);
     return () => {
-      this.anyHandlers.delete(handler);
+      this.anyHandlers.delete(handler as unknown as AnyHandler);
     };
   }
 
@@ -71,7 +76,11 @@ export class EventBus {
       }
     }
     for (const handler of this.anyHandlers) {
-      this.safeCall(handler, event as DomainEvent);
+      try {
+        handler(event as AnyDomainEvent);
+      } catch (error) {
+        this.logger.error('Falha em assinante de evento', { eventType: event.type }, error);
+      }
     }
     return event;
   }

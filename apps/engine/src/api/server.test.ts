@@ -266,6 +266,15 @@ describe('API local — projetos', () => {
     );
     expect(expectData(stopped.result).status).toBe('STOPPED');
 
+    const instances = await apiCall<Array<{ id: string; status: string }>>(
+      api,
+      'GET',
+      `/api/v1/projects/${project.id}/instances?limit=10`,
+    );
+    const instanceList = expectData(instances.result);
+    expect(instanceList.length).toBeGreaterThanOrEqual(2);
+    expect(instanceList[0]?.status).toBe('STOPPED');
+
     const events = await apiCall<Array<{ eventType: string }>>(
       api,
       'GET',

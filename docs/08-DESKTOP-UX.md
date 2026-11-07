@@ -1,5 +1,9 @@
 # 08 — Desktop e experiência do usuário
 
+> **Status (Fase 4a):** telas de Dashboard, Projetos, Detalhes (visão geral/logs/configuração/histórico),
+> Logs, Eventos e Configurações implementadas em `apps/desktop`, com cliente tipado e WebSocket.
+> Tray e shell Tauri ficam para a Fase 4b (ADR-015).
+
 ## 1. Direção visual
 
 Aplicativo desktop escuro por padrão, visual técnico e limpo, inspirado em ferramentas de desenvolvimento. Priorizar densidade de informação sem poluição visual.
