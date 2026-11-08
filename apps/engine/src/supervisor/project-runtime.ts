@@ -17,11 +17,13 @@ import { AppError, newId } from '@lsm/shared';
 import type { EventBus } from '../core/event-bus';
 import { OperationQueue } from '../core/operation-queue';
 import type { LogManager } from '../log-manager/log-manager';
+import { resolveLaunch, resolveStaticRoot } from '../launch/launch-resolver';
 import type { ProcessManager } from '../process-manager/process-manager';
 import type { ExitInfo, ManagedProcess } from '../process-manager/spawn-adapter';
-import { RecoveryManager } from '../recovery/recovery-manager';
-import { HealthMonitor } from '../health-monitor/health-monitor';
 import { checkPort } from '../ports/port-checker';
+import { HealthMonitor } from '../health-monitor/health-monitor';
+import { RecoveryManager } from '../recovery/recovery-manager';
+import type { StaticHostManager } from '../static/static-host';
 
 export const ACTIVE_STATUSES: readonly ProjectStatus[] = [
   'STARTING',
@@ -42,6 +44,7 @@ export interface ProjectRuntimeDeps {
   clock: Clock;
   logger: Logger;
   processManager: ProcessManager;
+  staticHost: StaticHostManager;
 }
 
 interface FailureDiagnosis {
@@ -97,6 +100,8 @@ interface SpawnSpec {
   args: string[];
   cwd: string;
   env: Record<string, string>;
+  launchMode?: 'direct' | 'wrapper';
+  launchNote?: string | null;
 }
 
 /**
@@ -246,7 +251,8 @@ export class ProjectRuntime {
       );
     }
 
-    const spec = this.buildSpawnSpec();
+    const staticMode = this.configValue.serveMode === 'static';
+    const spec = staticMode ? null : this.buildSpawnSpec();
     const instanceId = newId();
     const startedRequestAt = this.deps.clock.nowIso();
 
@@ -275,23 +281,34 @@ export class ProjectRuntime {
     this.deps.logManager.recordSystem(
       this.projectId,
       instanceId,
-      `start solicitado (motivo=${reason}, executável=${spec.executable})`,
+      staticMode
+        ? `start solicitado (motivo=${reason}, modo estático)`
+        : `start solicitado (motivo=${reason}, executável=${spec?.executable}${
+            spec?.launchMode === 'direct' ? ', execução direta' : ''
+          })`,
     );
     this.persistEvent('info', 'project.start.requested', `start solicitado (${reason})`, {
-      executable: spec.executable,
-      args: spec.args,
-      cwd: spec.cwd,
+      executable: spec?.executable ?? 'static',
+      args: spec?.args ?? [],
+      cwd: staticMode ? this.configValue.workingDirectory : (spec?.cwd ?? ''),
+      launchMode: spec?.launchMode ?? 'static',
     });
 
     await this.checkConfiguredPort(instanceId);
 
+    if (staticMode) {
+      await this.startStatic(instanceId);
+      return;
+    }
+    const spawnSpec = spec as SpawnSpec;
+
     let managed: ManagedProcess;
     try {
       managed = this.deps.processManager.spawn({
-        executable: spec.executable,
-        args: spec.args,
-        cwd: spec.cwd,
-        env: spec.env,
+        executable: spawnSpec.executable,
+        args: spawnSpec.args,
+        cwd: spawnSpec.cwd,
+        env: spawnSpec.env,
       });
     } catch (error) {
       const spawnError = error instanceof Error ? error : new Error(String(error));
@@ -367,6 +384,126 @@ export class ProjectRuntime {
     );
   }
 
+  /**
+   * Sobe o conteúdo estático no próprio Engine (sem processo filho) e mantém
+   * o mesmo ciclo de vida/estado dos projetos comuns.
+   */
+  private async startStatic(instanceId: string): Promise<void> {
+    const port = this.configValue.port;
+    if (port === null) {
+      return this.failStatic(
+        instanceId,
+        `Modo estático exige uma porta fixa em "${this.configValue.name}"`,
+        'Defina uma porta fixa para servir o projeto estático.',
+      );
+    }
+    const root = resolveStaticRoot(this.configValue);
+    if (root === null) {
+      return this.failStatic(
+        instanceId,
+        `Nenhum diretório estático (dist/build/out) encontrado para "${this.configValue.name}"`,
+        'Rode o build do projeto ou ajuste o diretório de saída.',
+      );
+    }
+
+    try {
+      await this.deps.staticHost.start({ projectId: this.projectId, root, port });
+    } catch (cause) {
+      const error = cause instanceof Error ? cause : new Error(String(cause));
+      const inUse = /EADDRINUSE|address already in use/i.test(error.message);
+      return this.failStatic(
+        instanceId,
+        `Falha ao servir "${this.configValue.name}" na porta ${port}: ${error.message}`,
+        inUse
+          ? `Porta ${port} já está em uso. Encerre o processo que a ocupa ou altere a porta.`
+          : 'Não foi possível iniciar o servidor estático.',
+      );
+    }
+
+    if (this.instanceIdValue !== instanceId || this.statusValue !== 'STARTING') {
+      return;
+    }
+
+    const startedAt = this.deps.clock.nowIso();
+    this.startedAtValue = startedAt;
+    this.updatedAtValue = startedAt;
+    this.healthValue = 'HEALTHY';
+    this.pidValue = null;
+    this.tryPersist(() =>
+      this.deps.repositories.instances.markRunning({
+        id: instanceId,
+        pid: null,
+        pidStartedAt: null,
+        startedAt,
+      }),
+    );
+    this.transition('RUNNING');
+    this.deps.logManager.recordSystem(
+      this.projectId,
+      instanceId,
+      `servindo estático de ${root} em http://127.0.0.1:${port}`,
+    );
+    this.persistEvent('info', 'project.process.started', `servindo estático (porta ${port})`, {
+      root,
+      port,
+    });
+  }
+
+  private failStatic(instanceId: string, message: string, hint: string): never {
+    const at = this.deps.clock.nowIso();
+    this.lastFailureHintValue = hint;
+    this.desired = 'STOPPED';
+    this.healthValue = 'UNKNOWN';
+    this.startedAtValue = null;
+    this.pidValue = null;
+    this.updatedAtValue = at;
+    this.safeTransition('FAILED');
+    this.tryPersist(() =>
+      this.deps.repositories.instances.finish({
+        id: instanceId,
+        endedAt: at,
+        exitCode: null,
+        exitSignal: null,
+        terminationReason: 'EXIT_UNEXPECTED',
+        status: 'FAILED',
+      }),
+    );
+    this.deps.logManager.recordSystem(
+      this.projectId,
+      instanceId,
+      `falha no modo estático: ${message}`,
+    );
+    this.persistEvent('error', 'project.crashed', message, { hint, static: true });
+    void this.deps.logManager.closeInstance(instanceId).catch(() => undefined);
+    throw new AppError('PROJECT_START_FAILED', message);
+  }
+
+  private async stopStatic(instanceId: string): Promise<void> {
+    await this.deps.staticHost.stop(this.projectId);
+    const at = this.deps.clock.nowIso();
+    this.healthValue = 'UNKNOWN';
+    this.startedAtValue = null;
+    this.pidValue = null;
+    this.updatedAtValue = at;
+    this.safeTransition('STOPPED');
+    this.tryPersist(() =>
+      this.deps.repositories.instances.finish({
+        id: instanceId,
+        endedAt: at,
+        exitCode: 0,
+        exitSignal: null,
+        terminationReason: this.stopReason ?? 'STOP_MANUAL',
+        status: 'STOPPED',
+      }),
+    );
+    this.deps.logManager.recordSystem(
+      this.projectId,
+      instanceId,
+      `stop do modo estático (${this.stopReason ?? 'STOP_MANUAL'})`,
+    );
+    await this.deps.logManager.closeInstance(instanceId);
+  }
+
   private async doStop(reason: TerminationReason): Promise<void> {
     if (!isActiveStatus(this.statusValue)) {
       throw new AppError(
@@ -388,6 +525,11 @@ export class ProjectRuntime {
       this.deps.logManager.recordSystem(this.projectId, instanceId, `stop solicitado (${reason})`);
     }
     this.persistEvent('info', 'project.stop.requested', `stop solicitado (${reason})`, { pid });
+
+    if (this.configValue.serveMode === 'static' && instanceId !== null) {
+      await this.stopStatic(instanceId);
+      return;
+    }
 
     if (pid === null || instanceId === null) {
       this.safeTransition('STOPPED');
@@ -815,6 +957,33 @@ export class ProjectRuntime {
       );
     }
 
+    const launch = resolveLaunch(this.configValue);
+    if (launch.mode === 'direct') {
+      this.deps.logger.info('Execução direta resolvida', {
+        projectId: this.projectId,
+        executable: launch.executable,
+        args: launch.args,
+        cwd: launch.cwd,
+        reason: launch.reason,
+      });
+      return {
+        executable: launch.executable,
+        args: launch.args,
+        cwd: launch.cwd,
+        env: { ...this.configValue.environment, ...launch.extraEnv },
+        launchMode: 'direct',
+        launchNote: launch.reason,
+      };
+    }
+    if (this.configValue.launchMode === 'direct') {
+      throw new AppError(
+        'PROJECT_INVALID_CONFIG',
+        `Execução direta não foi possível para "${this.configValue.name}": ${
+          launch.reason ?? 'motivo desconhecido'
+        }`,
+      );
+    }
+
     const requested = this.configValue.runtime.executable;
     let executable: string;
     try {
@@ -834,6 +1003,8 @@ export class ProjectRuntime {
       args: this.configValue.runtime.args,
       cwd,
       env: { ...this.configValue.environment },
+      launchMode: 'wrapper',
+      launchNote: launch.reason,
     };
   }
 

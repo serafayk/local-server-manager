@@ -1,14 +1,21 @@
 import { z } from 'zod';
 import type {
   HealthCheckConfig,
+  LaunchMode,
   LoggingConfig,
   PortSource,
   ProjectConfig,
   RestartPolicy,
   RuntimeConfig,
+  ServeMode,
   ShutdownConfig,
 } from '@lsm/contracts';
-import { CURRENT_CONFIG_SCHEMA_VERSION, PORT_SOURCES } from '@lsm/contracts';
+import {
+  CURRENT_CONFIG_SCHEMA_VERSION,
+  LAUNCH_MODES,
+  PORT_SOURCES,
+  SERVE_MODES,
+} from '@lsm/contracts';
 import { AppError } from '@lsm/shared';
 
 const MAX_ARG_COUNT = 64;
@@ -205,6 +212,9 @@ export const createProjectRequestSchema = z
     groupId: z.string().trim().min(1).max(64).nullable().optional(),
     workingDirectory: workingDirectorySchema,
     runtime: runtimeConfigSchema,
+    launchMode: z.enum(LAUNCH_MODES).default('auto'),
+    serveMode: z.enum(SERVE_MODES).default('process'),
+    outputDir: z.string().trim().max(1_024).nullable().optional(),
     environment: environmentSchema,
     port: portSchema,
     portSource: portSourceSchema,
@@ -241,6 +251,9 @@ export interface NormalizedProjectFields {
   groupId: string | null;
   workingDirectory: string;
   runtime: RuntimeConfig;
+  launchMode: LaunchMode;
+  serveMode: ServeMode;
+  outputDir: string | null;
   environment: Record<string, string>;
   port: number | null;
   portSource: PortSource;
@@ -263,6 +276,9 @@ function normalizeFields(parsed: ParsedCreateProjectRequest): NormalizedProjectF
     groupId: parsed.groupId ?? null,
     workingDirectory: parsed.workingDirectory,
     runtime: { executable: parsed.runtime.executable, args: [...parsed.runtime.args] },
+    launchMode: parsed.launchMode,
+    serveMode: parsed.serveMode,
+    outputDir: parsed.outputDir ?? null,
     environment: { ...parsed.environment },
     port: parsed.port,
     portSource,
@@ -306,6 +322,9 @@ export const updateProjectRequestSchema = z.strictObject({
   groupId: z.string().trim().min(1).max(64).nullable().optional(),
   workingDirectory: workingDirectorySchema.optional(),
   runtime: runtimeConfigSchema.optional(),
+  launchMode: z.enum(LAUNCH_MODES).optional(),
+  serveMode: z.enum(SERVE_MODES).optional(),
+  outputDir: z.string().trim().max(1_024).nullable().optional(),
   environment: z.record(z.string(), z.string().max(8_192)).optional(),
   port: z.number().int().min(1).max(65_535).nullable().optional(),
   portSource: z.enum(PORT_SOURCES).optional(),
@@ -333,6 +352,9 @@ export function parseUpdateProjectRequest(
   if (patch.groupId !== undefined) merged.groupId = patch.groupId;
   if (patch.workingDirectory !== undefined) merged.workingDirectory = patch.workingDirectory;
   if (patch.runtime !== undefined) merged.runtime = patch.runtime;
+  if (patch.launchMode !== undefined) merged.launchMode = patch.launchMode;
+  if (patch.serveMode !== undefined) merged.serveMode = patch.serveMode;
+  if (patch.outputDir !== undefined) merged.outputDir = patch.outputDir;
   if (patch.environment !== undefined) merged.environment = patch.environment;
   if (patch.port !== undefined) merged.port = patch.port;
   if (patch.portSource !== undefined) merged.portSource = patch.portSource;

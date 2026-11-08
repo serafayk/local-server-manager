@@ -1,9 +1,11 @@
 import type { ListEventsOptions, SystemEvent } from '@lsm/database';
 import type {
+  BuildResult,
   ExportBundle,
   ExportedProject,
   ImportConfigResponse,
   ImportConfigResult,
+  LaunchPreview,
   LogRecord,
   ProjectConfig,
   ProjectSummary,
@@ -19,6 +21,9 @@ import {
 } from '@lsm/validation';
 import type { EventBus } from '../core/event-bus';
 import type { LogManager } from '../log-manager/log-manager';
+import { resolveBuildCommand, resolveLaunch } from '../launch/launch-resolver';
+import type { ProcessManager } from '../process-manager/process-manager';
+import type { ManagedProcess } from '../process-manager/spawn-adapter';
 import type { GroupService } from './group-service';
 import { isActiveStatus } from './project-runtime';
 import type { Supervisor } from './supervisor';
@@ -26,11 +31,14 @@ import type { Supervisor } from './supervisor';
 const SENSITIVE_ENV_KEY =
   /(pass(word|phrase)?|secret|token|api[_-]?key|apikey|authorization|cookie|credential|private[_-]?key|session)/i;
 
+const BUILD_TIMEOUT_MS = 15 * 60 * 1_000;
+
 export interface ProjectServiceDeps {
   repositories: Repositories;
   supervisor: Supervisor;
   groups: GroupService;
   logManager: LogManager;
+  processManager: ProcessManager;
   events: EventBus;
   clock: Clock;
   logger: Logger;
@@ -46,6 +54,8 @@ export interface TailLogsResult {
  * responsabilidade exclusiva do Supervisor.
  */
 export class ProjectService {
+  private readonly building = new Set<string>();
+
   constructor(private readonly deps: ProjectServiceDeps) {}
 
   createProject(input: unknown): ProjectConfig {
@@ -183,6 +193,85 @@ export class ProjectService {
     return this.deps.repositories.events.list(options);
   }
 
+  /** Prévia do comando que o Engine usaria, sem iniciar nada. */
+  launchPreview(projectIdOrName: string): LaunchPreview {
+    const config = this.getProject(projectIdOrName);
+    const launch = resolveLaunch(config);
+    return {
+      mode: launch.mode,
+      executable: launch.executable,
+      args: launch.args,
+      cwd: launch.cwd,
+      reason: launch.reason,
+      skippedProcesses: launch.skippedProcesses,
+      script: launch.script,
+      appDirectory: launch.appDirectory,
+    };
+  }
+
+  /** Executa o script `build` uma única vez, com logs e timeout. */
+  async buildProject(projectIdOrName: string): Promise<BuildResult> {
+    const config = this.getProject(projectIdOrName);
+    const snapshot = this.deps.supervisor.getSnapshot(config.id);
+    if (isActiveStatus(snapshot.status)) {
+      throw new AppError(
+        'PROJECT_ALREADY_RUNNING',
+        `Pare o projeto "${config.name}" antes de rodar o build`,
+      );
+    }
+    if (this.building.has(config.id)) {
+      throw new AppError('PROJECT_ALREADY_RUNNING', 'Já existe um build em andamento');
+    }
+
+    const command = resolveBuildCommand(config);
+    if (command === null) {
+      throw new AppError(
+        'PROJECT_INVALID_CONFIG',
+        `Script "build" não encontrado para "${config.name}"`,
+      );
+    }
+
+    this.building.add(config.id);
+    const instanceId = newId();
+    const startedAt = Date.now();
+    this.deps.logManager.registerStream(config.id, instanceId, config.logging, 'project.log');
+    this.deps.logManager.recordSystem(
+      config.id,
+      instanceId,
+      `build iniciado (${command.executable} ${command.args.join(' ')})`,
+    );
+
+    try {
+      const managed = this.deps.processManager.spawn({
+        executable: command.executable,
+        args: command.args,
+        cwd: command.cwd,
+        env: { ...config.environment },
+      });
+      managed.onStdout((chunk) =>
+        this.deps.logManager.push(config.id, instanceId, 'stdout', chunk),
+      );
+      managed.onStderr((chunk) =>
+        this.deps.logManager.push(config.id, instanceId, 'stderr', chunk),
+      );
+
+      const exitCode = await waitForBuildExit(managed, BUILD_TIMEOUT_MS, () =>
+        this.deps.processManager.stop(managed.pid, { gracefulTimeoutMs: 5_000 }),
+      );
+      const durationMs = Date.now() - startedAt;
+      const success = exitCode === 0;
+      this.deps.logManager.recordSystem(
+        config.id,
+        instanceId,
+        `build ${success ? 'concluído' : 'falhou'} (code=${exitCode ?? 'null'}, ${Math.round(durationMs / 1_000)}s)`,
+      );
+      return { success, exitCode, durationMs, instanceId };
+    } finally {
+      this.building.delete(config.id);
+      await this.deps.logManager.closeInstance(instanceId).catch(() => undefined);
+    }
+  }
+
   /** Exporta configurações sem segredos de ambiente. */
   exportConfiguration(): ExportBundle {
     const groupNames = new Map(
@@ -210,6 +299,9 @@ export class ProjectService {
         maskedEnvironmentKeys,
         port: config.port,
         portSource: config.portSource,
+        launchMode: config.launchMode,
+        serveMode: config.serveMode,
+        outputDir: config.outputDir,
         enabled: config.enabled,
         startOnBoot: config.startOnBoot,
         startupOrder: config.startupOrder,
@@ -245,6 +337,9 @@ export class ProjectService {
           port: item.port ?? null,
           portSource:
             item.portSource ?? (item.port !== null && item.port !== undefined ? 'fixed' : 'none'),
+          launchMode: item.launchMode ?? 'auto',
+          serveMode: item.serveMode ?? 'process',
+          outputDir: item.outputDir ?? null,
           enabled: item.enabled ?? true,
           startOnBoot: item.startOnBoot ?? false,
           startupOrder: item.startupOrder ?? 0,
@@ -297,4 +392,30 @@ export class ProjectService {
       records: this.deps.logManager.tail(config.id, latest.id, limit),
     };
   }
+}
+
+function waitForBuildExit(
+  managed: ManagedProcess,
+  timeoutMs: number,
+  onTimeout: () => Promise<unknown>,
+): Promise<number | null> {
+  return new Promise<number | null>((resolvePromise) => {
+    let settled = false;
+    const finish = (code: number | null): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      resolvePromise(code);
+    };
+    managed.onExit((info) => finish(info.code));
+    managed.onError(() => finish(null));
+    const timer = setTimeout(() => {
+      void onTimeout()
+        .catch(() => undefined)
+        .finally(() => finish(null));
+    }, timeoutMs);
+    timer.unref();
+  });
 }

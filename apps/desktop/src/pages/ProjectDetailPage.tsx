@@ -1,9 +1,11 @@
 import type { LogRecord } from '@lsm/contracts';
+import { useMutation } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Copy, Pencil, Play, RotateCw, Square, Trash2 } from 'lucide-react';
+import { ArrowLeft, Copy, Hammer, Pencil, Play, RotateCw, Square, Trash2 } from 'lucide-react';
 import { useProjectActions } from '../lib/actions';
+import { useEngine } from '../providers/engine-provider';
 import {
   useProjectEvents,
   useProjectInstances,
@@ -60,6 +62,7 @@ function Definition({ label, value }: { label: string; value: ReactNode }) {
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { client } = useEngine();
   const query = useProjectQuery(id);
   const instances = useProjectInstances(id);
   const events = useProjectEvents(id);
@@ -72,6 +75,23 @@ export function ProjectDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [instanceId, setInstanceId] = useState<string | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [buildNotice, setBuildNotice] = useState<string | null>(null);
+
+  const build = useMutation({
+    mutationFn: () => client.buildProject(id ?? ''),
+    onSuccess: (result) => {
+      setBuildNotice(
+        result.success
+          ? `Build concluído em ${Math.round(result.durationMs / 1_000)}s.`
+          : `Build falhou (code ${result.exitCode ?? 'null'}). Veja os logs.`,
+      );
+      setInstanceId(result.instanceId);
+      setTab('logs');
+    },
+    onError: (error) => {
+      setBuildNotice(error instanceof Error ? error.message : String(error));
+    },
+  });
 
   const live = useAppStore((state) => (id ? (state.logsByProject[id] ?? EMPTY_LOGS) : EMPTY_LOGS));
   const projectMetrics = useAppStore((state) => (id ? state.metricsByProject[id] : undefined));
@@ -173,6 +193,19 @@ export function ProjectDetailPage() {
             </Button>
             <Button
               size="sm"
+              disabled={active}
+              loading={build.isPending}
+              title={active ? 'Pare o projeto antes de rodar o build' : 'Rodar o script build'}
+              onClick={() => {
+                setBuildNotice(null);
+                build.mutate();
+              }}
+            >
+              <Hammer className="h-3.5 w-3.5" />
+              Build
+            </Button>
+            <Button
+              size="sm"
               variant="danger"
               disabled={active}
               title={active ? 'Pare antes de remover' : 'Remover'}
@@ -185,6 +218,12 @@ export function ProjectDetailPage() {
       />
 
       {actionError ? <ErrorBanner message={actionError.message} /> : null}
+
+      {buildNotice ? (
+        <div className="mt-3 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-200">
+          {buildNotice}
+        </div>
+      ) : null}
 
       {runtime.lastFailureHint ? (
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-800/70 bg-amber-950/40 px-3 py-2 text-xs text-amber-200">
@@ -355,6 +394,24 @@ export function ProjectDetailPage() {
                   config.healthCheck.enabled
                     ? `${config.healthCheck.type} ${config.healthCheck.target}`
                     : 'desabilitado'
+                }
+              />
+              <Definition
+                label="Modo de execução"
+                value={
+                  config.launchMode === 'auto'
+                    ? 'automática (direta quando possível)'
+                    : config.launchMode === 'direct'
+                      ? 'direta'
+                      : 'com wrapper'
+                }
+              />
+              <Definition
+                label="Modo de serviço"
+                value={
+                  config.serveMode === 'static'
+                    ? `estático${config.outputDir ? ` (${config.outputDir})` : ''}`
+                    : 'processo Node'
                 }
               />
               <Definition

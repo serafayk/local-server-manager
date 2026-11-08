@@ -10,7 +10,8 @@
 - **Fase 5 — concluída:** health check HTTP/TCP com threshold e restart opcional com cooldown, detecção de conflito de porta (sem matar o ocupante) e métricas de CPU/memória via PowerShell em lote, expostas na UI.
 - **Fase 6 — concluída:** autostart via Agendador de Tarefas (toggle no app, remoção no desinstalador), backup/restauração do SQLite com aplicação no boot, instalador NSIS por usuário e documentação do usuário.
 - **Fase 10 — concluída:** túneis Cloudflare supervisionados (config.yml, token e quick tunnel), com start/stop, health, logs e URL pública.
-- **Próxima:** domínios amigáveis locais (proxy embutido), dependências entre projetos, perfis, Named Pipe/Job Objects, assinatura e updater.
+- **Fase 11 — concluída:** execução direta (sem pnpm/cmd/CLI) e hospedagem estática no Engine, com build one-shot.
+- **Próxima:** domínios amigáveis locais (proxy embutido), PgBouncer, dependências entre projetos, Named Pipe/Job Objects, assinatura e updater.
 
 Detalhes de execução, comandos e limitações: [15-DEVELOPMENT.md](15-DEVELOPMENT.md), [16-USER-GUIDE.md](16-USER-GUIDE.md) e `CHANGELOG.md`.
 

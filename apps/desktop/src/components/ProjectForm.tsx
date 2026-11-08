@@ -623,6 +623,63 @@ export function ProjectForm({
           </div>
 
           <div className="rounded-lg border border-zinc-800 p-3">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field
+                label="Modo de execução"
+                htmlFor="project-launch"
+                hint="Direta evita pnpm, cmd.exe e o CLI do tsx/next/vite."
+              >
+                <Select
+                  id="project-launch"
+                  value={state.launchMode}
+                  onChange={(event) =>
+                    update('launchMode', event.target.value as ProjectFormState['launchMode'])
+                  }
+                >
+                  <option value="auto">Automática (recomendado)</option>
+                  <option value="direct">Direta (sem wrappers)</option>
+                  <option value="wrapper">Com wrapper (pnpm/npm)</option>
+                </Select>
+              </Field>
+              <Field
+                label="Modo de serviço"
+                htmlFor="project-serve"
+                hint="Estático serve o build pelo Engine, sem processo Node."
+              >
+                <Select
+                  id="project-serve"
+                  value={state.serveMode}
+                  onChange={(event) =>
+                    update('serveMode', event.target.value as ProjectFormState['serveMode'])
+                  }
+                >
+                  <option value="process">Processo (Node)</option>
+                  <option value="static">Estático (dist/build)</option>
+                </Select>
+              </Field>
+              {state.serveMode === 'static' ? (
+                <Field
+                  label="Diretório de saída"
+                  htmlFor="project-output"
+                  hint="Relativo ao projeto; vazio detecta dist/build/out."
+                >
+                  <Input
+                    id="project-output"
+                    value={state.outputDir}
+                    onChange={(event) => update('outputDir', event.target.value)}
+                    placeholder="dist"
+                    className="mono"
+                  />
+                </Field>
+              ) : null}
+            </div>
+            <p className="mt-2 text-[11px] text-zinc-600">
+              Execução direta remove ~2 processos de wrapper por projeto. O modo estático atende
+              SPAs construídas (não faz SSR).
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-zinc-800 p-3">
             <div className="flex flex-wrap items-end gap-3">
               <Field
                 label="Perfil de memória"

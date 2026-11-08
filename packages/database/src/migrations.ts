@@ -145,4 +145,18 @@ CREATE INDEX idx_tunnels_project ON tunnels (project_id);
 `,
 };
 
-export const MIGRATIONS: readonly Migration[] = [MIGRATION_001, MIGRATION_002];
+export const MIGRATION_003: Migration = {
+  version: 3,
+  name: 'launch-and-serve-modes',
+  sql: `
+ALTER TABLE projects ADD COLUMN launch_mode TEXT NOT NULL DEFAULT 'auto'
+  CHECK (launch_mode IN ('auto', 'wrapper', 'direct'));
+
+ALTER TABLE projects ADD COLUMN serve_mode TEXT NOT NULL DEFAULT 'process'
+  CHECK (serve_mode IN ('process', 'static'));
+
+ALTER TABLE projects ADD COLUMN output_dir TEXT;
+`,
+};
+
+export const MIGRATIONS: readonly Migration[] = [MIGRATION_001, MIGRATION_002, MIGRATION_003];

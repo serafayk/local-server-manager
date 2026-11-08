@@ -13,6 +13,7 @@ import type { EventBus } from '../core/event-bus';
 import { runWithConcurrency } from '../core/concurrency';
 import type { LogManager } from '../log-manager/log-manager';
 import type { ProcessManager } from '../process-manager/process-manager';
+import type { StaticHostManager } from '../static/static-host';
 import { isActiveStatus, ProjectRuntime } from './project-runtime';
 import { RuntimeRegistry } from './runtime-registry';
 
@@ -23,6 +24,7 @@ export interface SupervisorDeps {
   clock: Clock;
   logger: Logger;
   processManager: ProcessManager;
+  staticHost: StaticHostManager;
   batchConcurrency: number;
 }
 
@@ -57,6 +59,7 @@ export class Supervisor {
         clock: this.deps.clock,
         logger: this.deps.logger,
         processManager: this.deps.processManager,
+        staticHost: this.deps.staticHost,
       }),
     );
   }

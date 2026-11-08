@@ -20,6 +20,9 @@ interface ProjectJoinRow {
   working_directory: string;
   runtime_json: string;
   environment_json: string;
+  launch_mode: string;
+  serve_mode: string;
+  output_dir: string | null;
   port: number | null;
   port_source: string;
   enabled: number;
@@ -51,7 +54,8 @@ interface ProjectJoinRow {
 const SELECT_PROJECT = `
 SELECT
   p.id, p.name, p.description, p.group_id, p.working_directory, p.runtime_json,
-  p.environment_json, p.port, p.port_source, p.enabled, p.start_on_boot, p.startup_order,
+  p.environment_json, p.launch_mode, p.serve_mode, p.output_dir,
+  p.port, p.port_source, p.enabled, p.start_on_boot, p.startup_order,
   p.logging_json, p.shutdown_json, p.config_schema_version, p.created_at, p.updated_at,
   r.enabled AS r_enabled,
   r.max_retries AS r_max_retries,
@@ -77,10 +81,12 @@ JOIN health_checks h ON h.project_id = p.id
 const INSERT_PROJECT = `
 INSERT INTO projects (
   id, name, description, group_id, working_directory, runtime_json, environment_json,
+  launch_mode, serve_mode, output_dir,
   port, port_source, enabled, start_on_boot, startup_order, logging_json, shutdown_json,
   config_schema_version, created_at, updated_at
 ) VALUES (
   $id, $name, $description, $groupId, $workingDirectory, $runtimeJson, $environmentJson,
+  $launchMode, $serveMode, $outputDir,
   $port, $portSource, $enabled, $startOnBoot, $startupOrder, $loggingJson, $shutdownJson,
   $schemaVersion, $createdAt, $updatedAt
 )
@@ -163,6 +169,9 @@ function mapRow(row: ProjectJoinRow): ProjectConfig {
       groupId: row.group_id,
       workingDirectory: row.working_directory,
       runtime,
+      launchMode: row.launch_mode as ProjectConfig['launchMode'],
+      serveMode: row.serve_mode as ProjectConfig['serveMode'],
+      outputDir: row.output_dir,
       environment,
       port: row.port,
       portSource: row.port_source,
@@ -225,7 +234,9 @@ export class SqliteProjectRepository {
             `UPDATE projects SET
               name = $name, description = $description, group_id = $groupId,
               working_directory = $workingDirectory, runtime_json = $runtimeJson,
-              environment_json = $environmentJson, port = $port, port_source = $portSource,
+              environment_json = $environmentJson,
+              launch_mode = $launchMode, serve_mode = $serveMode, output_dir = $outputDir,
+              port = $port, port_source = $portSource,
               enabled = $enabled, start_on_boot = $startOnBoot, startup_order = $startupOrder,
               logging_json = $loggingJson, shutdown_json = $shutdownJson,
               config_schema_version = $schemaVersion, updated_at = $updatedAt
@@ -239,6 +250,9 @@ export class SqliteProjectRepository {
             workingDirectory: config.workingDirectory,
             runtimeJson: JSON.stringify(config.runtime),
             environmentJson: JSON.stringify(config.environment),
+            launchMode: config.launchMode,
+            serveMode: config.serveMode,
+            outputDir: config.outputDir,
             port: config.port,
             portSource: config.portSource,
             enabled: toSqlBool(config.enabled),
@@ -311,6 +325,9 @@ export class SqliteProjectRepository {
       workingDirectory: config.workingDirectory,
       runtimeJson: JSON.stringify(config.runtime),
       environmentJson: JSON.stringify(config.environment),
+      launchMode: config.launchMode,
+      serveMode: config.serveMode,
+      outputDir: config.outputDir,
       port: config.port,
       portSource: config.portSource,
       enabled: toSqlBool(config.enabled),

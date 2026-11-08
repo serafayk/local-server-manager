@@ -196,6 +196,22 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
       return sendSuccess(reply, created, requestIdOf(request), 201);
     });
 
+    instance.get('/api/v1/projects/:id/launch-preview', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        options.projects.launchPreview(projectIdOf(request)),
+        requestIdOf(request),
+      );
+    });
+
+    instance.post('/api/v1/projects/:id/build', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        await options.projects.buildProject(projectIdOf(request)),
+        requestIdOf(request),
+      );
+    });
+
     instance.get('/api/v1/projects/export', async (request, reply) => {
       return sendSuccess(reply, options.projects.exportConfiguration(), requestIdOf(request));
     });

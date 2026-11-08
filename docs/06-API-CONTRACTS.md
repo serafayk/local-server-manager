@@ -45,53 +45,55 @@ gerado pelo Engine. Não retornar stack trace; o stack completo fica no log inte
 
 ## 4. Rotas
 
-| Método | Rota                             | Finalidade                                 |
-| ------ | -------------------------------- | ------------------------------------------ |
-| GET    | `/api/v1/health`                 | Saúde do Engine                            |
-| GET    | `/api/v1/info`                   | Informações + endpoint da API              |
-| GET    | `/api/v1/projects`               | Listar projetos (com runtime)              |
-| POST   | `/api/v1/projects`               | Criar projeto                              |
-| POST   | `/api/v1/projects/detect`        | Ler `package.json`/lockfile                |
-| POST   | `/api/v1/projects/scan-root`     | Varrer a raiz e propor projetos            |
-| POST   | `/api/v1/projects/import`        | Criar a partir de uma pasta                |
-| GET    | `/api/v1/projects/export`        | Exportar configurações (sem segredos)      |
-| POST   | `/api/v1/projects/import-config` | Importar bundle de configurações           |
-| GET    | `/api/v1/groups`                 | Listar grupos                              |
-| POST   | `/api/v1/groups`                 | Criar grupo                                |
-| PUT    | `/api/v1/groups/:id`             | Renomear/reordenar grupo                   |
-| DELETE | `/api/v1/groups/:id`             | Remover grupo                              |
-| GET    | `/api/v1/system/node-versions`   | Instalações de Node detectadas             |
-| GET    | `/api/v1/tunnels`                | Lista túneis Cloudflare                    |
-| POST   | `/api/v1/tunnels`                | Cria túnel (config/token/quick)            |
-| GET    | `/api/v1/tunnels/:id`            | Detalhe do túnel                           |
-| PUT    | `/api/v1/tunnels/:id`            | Atualiza (parado)                          |
-| DELETE | `/api/v1/tunnels/:id`            | Remove cadastro                            |
-| POST   | `/api/v1/tunnels/:id/start`      | Inicia cloudflared                         |
-| POST   | `/api/v1/tunnels/:id/stop`       | Para                                       |
-| POST   | `/api/v1/tunnels/:id/restart`    | Reinicia                                   |
-| GET    | `/api/v1/tunnels/:id/logs`       | Saída do cloudflared                       |
-| GET    | `/api/v1/projects/:id`           | Detalhar                                   |
-| PUT    | `/api/v1/projects/:id`           | Atualizar (parcial, mesclado)              |
-| DELETE | `/api/v1/projects/:id`           | Remover cadastro                           |
-| POST   | `/api/v1/projects/:id/start`     | Iniciar                                    |
-| POST   | `/api/v1/projects/:id/stop`      | Parar                                      |
-| POST   | `/api/v1/projects/:id/restart`   | Reiniciar                                  |
-| GET    | `/api/v1/projects/:id/status`    | Estado atual                               |
-| GET    | `/api/v1/projects/:id/logs`      | Histórico de logs (`?tail`, `?instanceId`) |
-| GET    | `/api/v1/projects/:id/events`    | Histórico de eventos                       |
-| GET    | `/api/v1/projects/:id/instances` | Histórico de instâncias                    |
-| GET    | `/api/v1/events`                 | Histórico global (`?projectId`)            |
-| POST   | `/api/v1/bulk/start`             | Iniciar selecionados                       |
-| POST   | `/api/v1/bulk/stop`              | Parar selecionados                         |
-| GET    | `/api/v1/settings`               | Configuração do Engine                     |
-| PUT    | `/api/v1/settings`               | Atualiza configuração                      |
-| GET    | `/api/v1/ws`                     | WebSocket de eventos                       |
-| GET    | `/api/v1/system/metrics`         | Métricas atuais dos processos              |
-| POST   | `/api/v1/system/backup`          | Cria backup do SQLite                      |
-| GET    | `/api/v1/system/backups`         | Lista backups disponíveis                  |
-| POST   | `/api/v1/system/restore`         | Agenda restauração para o próximo boot     |
-| GET    | `/api/v1/ports`                  | Ocupação das portas configuradas           |
-| GET    | `/api/v1/ports/:port`            | Ocupação de uma porta                      |
+| Método | Rota                                  | Finalidade                                 |
+| ------ | ------------------------------------- | ------------------------------------------ |
+| GET    | `/api/v1/health`                      | Saúde do Engine                            |
+| GET    | `/api/v1/info`                        | Informações + endpoint da API              |
+| GET    | `/api/v1/projects`                    | Listar projetos (com runtime)              |
+| POST   | `/api/v1/projects`                    | Criar projeto                              |
+| POST   | `/api/v1/projects/detect`             | Ler `package.json`/lockfile                |
+| POST   | `/api/v1/projects/scan-root`          | Varrer a raiz e propor projetos            |
+| POST   | `/api/v1/projects/import`             | Criar a partir de uma pasta                |
+| GET    | `/api/v1/projects/export`             | Exportar configurações (sem segredos)      |
+| POST   | `/api/v1/projects/import-config`      | Importar bundle de configurações           |
+| GET    | `/api/v1/groups`                      | Listar grupos                              |
+| POST   | `/api/v1/groups`                      | Criar grupo                                |
+| PUT    | `/api/v1/groups/:id`                  | Renomear/reordenar grupo                   |
+| DELETE | `/api/v1/groups/:id`                  | Remover grupo                              |
+| GET    | `/api/v1/system/node-versions`        | Instalações de Node detectadas             |
+| GET    | `/api/v1/tunnels`                     | Lista túneis Cloudflare                    |
+| POST   | `/api/v1/tunnels`                     | Cria túnel (config/token/quick)            |
+| GET    | `/api/v1/tunnels/:id`                 | Detalhe do túnel                           |
+| PUT    | `/api/v1/tunnels/:id`                 | Atualiza (parado)                          |
+| DELETE | `/api/v1/tunnels/:id`                 | Remove cadastro                            |
+| POST   | `/api/v1/tunnels/:id/start`           | Inicia cloudflared                         |
+| POST   | `/api/v1/tunnels/:id/stop`            | Para                                       |
+| POST   | `/api/v1/tunnels/:id/restart`         | Reinicia                                   |
+| GET    | `/api/v1/tunnels/:id/logs`            | Saída do cloudflared                       |
+| GET    | `/api/v1/projects/:id`                | Detalhar                                   |
+| PUT    | `/api/v1/projects/:id`                | Atualizar (parcial, mesclado)              |
+| DELETE | `/api/v1/projects/:id`                | Remover cadastro                           |
+| POST   | `/api/v1/projects/:id/start`          | Iniciar                                    |
+| POST   | `/api/v1/projects/:id/stop`           | Parar                                      |
+| POST   | `/api/v1/projects/:id/restart`        | Reiniciar                                  |
+| GET    | `/api/v1/projects/:id/launch-preview` | Comando resolvido (direto/wrapper)         |
+| POST   | `/api/v1/projects/:id/build`          | Rodar o script `build` uma vez             |
+| GET    | `/api/v1/projects/:id/status`         | Estado atual                               |
+| GET    | `/api/v1/projects/:id/logs`           | Histórico de logs (`?tail`, `?instanceId`) |
+| GET    | `/api/v1/projects/:id/events`         | Histórico de eventos                       |
+| GET    | `/api/v1/projects/:id/instances`      | Histórico de instâncias                    |
+| GET    | `/api/v1/events`                      | Histórico global (`?projectId`)            |
+| POST   | `/api/v1/bulk/start`                  | Iniciar selecionados                       |
+| POST   | `/api/v1/bulk/stop`                   | Parar selecionados                         |
+| GET    | `/api/v1/settings`                    | Configuração do Engine                     |
+| PUT    | `/api/v1/settings`                    | Atualiza configuração                      |
+| GET    | `/api/v1/ws`                          | WebSocket de eventos                       |
+| GET    | `/api/v1/system/metrics`              | Métricas atuais dos processos              |
+| POST   | `/api/v1/system/backup`               | Cria backup do SQLite                      |
+| GET    | `/api/v1/system/backups`              | Lista backups disponíveis                  |
+| POST   | `/api/v1/system/restore`              | Agenda restauração para o próximo boot     |
+| GET    | `/api/v1/ports`                       | Ocupação das portas configuradas           |
+| GET    | `/api/v1/ports/:port`                 | Ocupação de uma porta                      |
 
 `PUT /projects/:id` é uma atualização parcial: campos ausentes preservam o
 valor atual e o resultado passa pela validação completa. Projeto em execução

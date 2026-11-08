@@ -11,6 +11,16 @@ export type PortSource = 'none' | 'fixed' | 'env' | 'detected';
 
 export const PORT_SOURCES = ['none', 'fixed', 'env', 'detected'] as const;
 
+/** Como o LSM lança o processo: direto (sem wrappers) ou pelo script do package manager. */
+export type LaunchMode = 'auto' | 'wrapper' | 'direct';
+
+export const LAUNCH_MODES = ['auto', 'wrapper', 'direct'] as const;
+
+/** Como o serviço é servido: processo próprio ou arquivos estáticos pelo Engine. */
+export type ServeMode = 'process' | 'static';
+
+export const SERVE_MODES = ['process', 'static'] as const;
+
 export interface RestartPolicy {
   enabled: boolean;
   maxRetries: number;
@@ -62,6 +72,12 @@ export interface ProjectConfig {
   startupOrder: number;
   workingDirectory: string;
   runtime: RuntimeConfig;
+  /** `auto` tenta lançamento direto; `wrapper` mantém pnpm/npm; `direct` exige direto. */
+  launchMode: LaunchMode;
+  /** `process` sobe um processo; `static` serve arquivos pelo Engine. */
+  serveMode: ServeMode;
+  /** Diretório servido no modo estático (relativo à raiz do projeto ou absoluto). */
+  outputDir: string | null;
   environment: Record<string, string>;
   port: number | null;
   portSource: PortSource;
@@ -74,4 +90,4 @@ export interface ProjectConfig {
   updatedAt: string;
 }
 
-export const CURRENT_CONFIG_SCHEMA_VERSION = 1;
+export const CURRENT_CONFIG_SCHEMA_VERSION = 2;

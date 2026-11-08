@@ -1,10 +1,12 @@
 import type {
   HealthCheckConfig,
+  LaunchMode,
   LoggingConfig,
   PortSource,
   ProjectConfig,
   RestartPolicy,
   RuntimeConfig,
+  ServeMode,
   ShutdownConfig,
 } from './config';
 import type { RuntimeSnapshot, ProjectStatus } from './domain';
@@ -95,6 +97,9 @@ export interface ExportedProject {
   maskedEnvironmentKeys: string[];
   port: number | null;
   portSource: PortSource;
+  launchMode: LaunchMode;
+  serveMode: ServeMode;
+  outputDir: string | null;
   enabled: boolean;
   startOnBoot: boolean;
   startupOrder: number;
@@ -187,6 +192,25 @@ export interface ScanRootResponse {
   isMonorepo: boolean;
   groupSuggestion: string;
   projects: ScannedProject[];
+}
+
+/** Prévia de como o Engine lançaria o projeto (sem iniciar nada). */
+export interface LaunchPreview {
+  mode: 'direct' | 'wrapper';
+  executable: string;
+  args: string[];
+  cwd: string;
+  reason: string | null;
+  skippedProcesses: number;
+  script: string | null;
+  appDirectory: string | null;
+}
+
+export interface BuildResult {
+  success: boolean;
+  exitCode: number | null;
+  durationMs: number;
+  instanceId: string;
 }
 
 export interface ImportProjectRequest {

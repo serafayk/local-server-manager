@@ -10,9 +10,10 @@ export interface CreateInstanceInput {
 
 export interface MarkRunningInput {
   id: string;
-  pid: number;
-  /** Instante de criação esperado do processo — usado contra reuso de PID. */
-  pidStartedAt: string;
+  /** `null` quando o serviço é estático (sem processo próprio). */
+  pid: number | null;
+  /** Instante de criação esperado do processo - usado contra reuso de PID. */
+  pidStartedAt: string | null;
   startedAt: string;
 }
 

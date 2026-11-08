@@ -2,6 +2,17 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.12.0] — 2026-11-08
+
+### Fase 11 — Execução direta e hospedagem estática
+
+- `launchMode` (`auto`/`wrapper`/`direct`): resolve o script para `node`, `node --import tsx`, `next` ou `vite`, eliminando pnpm, cmd.exe e o CLI intermediário (~100 MB por projeto).
+- `GET /projects/:id/launch-preview` mostra comando, motivo e processos evitados; scripts com shell ou `tsx watch` em `auto` caem no wrapper.
+- `serveMode: static`: o Engine serve `dist`/`build`/`out` no próprio processo, com SPA fallback, MIME, cache e proteção contra path traversal — projeto `RUNNING` sem PID.
+- `POST /projects/:id/build`: build one-shot com logs e timeout de 15 min.
+- Migração v3 (`launch_mode`, `serve_mode`, `output_dir`), campos na API/UI e export/import.
+- 10 novos testes; total de 297.
+
 ## [0.11.1] — 2026-11-08
 
 ### Instalação sobre um Engine em execução

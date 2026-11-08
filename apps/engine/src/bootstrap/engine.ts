@@ -29,6 +29,7 @@ import { applyPendingRestore, BackupManager } from '../backup/backup-manager';
 import { ProjectService } from '../supervisor/project-service';
 import { GroupService } from '../supervisor/group-service';
 import { Supervisor } from '../supervisor/supervisor';
+import { StaticHostManager } from '../static/static-host';
 import { TunnelManager } from '../tunnels/tunnel-manager';
 import { reconcileInstances } from './reconciliation';
 import { acquireInstanceLock, type InstanceLock } from './single-instance';
@@ -112,6 +113,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     events,
   });
   const processManager = new ProcessManager(logger);
+  const staticHost = new StaticHostManager();
   const supervisor = new Supervisor({
     repositories,
     logManager,
@@ -119,6 +121,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     clock,
     logger,
     processManager,
+    staticHost,
     batchConcurrency: DEFAULT_ENGINE_SETTINGS.batchConcurrency,
   });
   const groups = new GroupService({ repositories, clock, logger });
@@ -135,6 +138,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     supervisor,
     groups,
     logManager,
+    processManager,
     events,
     clock,
     logger,
@@ -369,6 +373,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
         metrics.stop();
         await tunnels.shutdown();
         await supervisor.shutdown();
+        await staticHost.stopAll();
         await logManager.closeAll();
       } finally {
         if (retentionTimer) {

@@ -88,6 +88,27 @@ o detalhe mostra **Última falha** com a causa. Corrija e clique em **Iniciar**.
 - **Duplicar** cria outro projeto com a mesma configuração, sem copiar porta nem
   boot (evita conflito imediato).
 
+### Modos de execução e serviço
+
+Em **Execução → Modo de execução**:
+
+| Modo                | Efeito                                                                                          |
+| ------------------- | ----------------------------------------------------------------------------------------------- |
+| Automática (padrão) | Tenta lançar direto (`node`, `node --import tsx`, `next`, `vite`) sem pnpm, cmd.exe e CLI extra |
+| Direta              | Exige o modo direto; falha se não for possível                                                  |
+| Com wrapper         | Mantém o script do package manager (comportamento antigo)                                       |
+
+Scripts com shell (`&&`, `|`), `tsx watch` em automático ou binários
+desconhecidos continuam no wrapper — o motivo aparece no log.
+
+Em **Modo de serviço**:
+
+- **Processo (Node)**: comportamento normal.
+- **Estático (dist/build)**: o Engine serve os arquivos diretamente, sem processo
+  Node. Requer build prévio; use o botão **Build** no detalhe do projeto.
+
+O modo estático não faz SSR — use apenas para SPAs (Vite, CRA, export estático).
+
 ### Perfil de memória
 
 Em **Execução → Perfil de memória** você aplica `NODE_OPTIONS` ao projeto

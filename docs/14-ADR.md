@@ -2,6 +2,22 @@
 
 Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicionadas no topo com data, contexto, decisão, alternativas e consequências.
 
+## ADR-022 — Execução direta e hospedagem estática no Engine
+
+**Status:** Aceita (Fase 11)
+
+**Contexto:** cada projeto Node iniciado por `pnpm … start` mantinha 4 processos (pnpm, cmd.exe, CLI do tsx/next/vite e o app), somando ~100 MB de overhead por projeto. Frontends construídos ainda subiam um servidor de desenvolvimento pesado.
+
+**Decisão:**
+
+1. **`launchMode`** (`auto` padrão, `wrapper`, `direct`): o Engine interpreta o runtime (`pnpm/npm/yarn run <script>` ou `--filter <pkg>`) e resolve o script para um spawn direto — `node arquivo`, `node --import tsx`, `next`, `vite` — sem pnpm, cmd.exe ou CLI intermediário. Scripts com shell, `tsx watch` em `auto` e binários desconhecidos caem no wrapper com motivo registrado.
+2. **`GET /projects/:id/launch-preview`** expõe o comando resolvido antes do start.
+3. **`serveMode: static`**: o Engine serve `dist`/`build`/`out` no próprio processo (`StaticHostManager`), com SPA fallback, MIME, cache e proteção contra path traversal. O projeto fica `RUNNING` sem PID.
+4. **`POST /projects/:id/build`**: executa o script `build` uma vez, com logs e timeout de 15 min; só com o projeto parado.
+5. Migração v3 adiciona `launch_mode`, `serve_mode`, `output_dir`; padrões preservam o comportamento anterior.
+
+**Consequências:** ~100 MB por projeto deixam de ser gastos com wrappers; SPAs construídas não usam processo Node. `tsx watch` não é removido silenciosamente (precisa de `direct` explícito). SSR (Next) continua como processo.
+
 ## ADR-021 — Túneis Cloudflare supervisionados
 
 **Status:** Aceita (Fase 10)

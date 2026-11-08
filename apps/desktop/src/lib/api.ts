@@ -1,5 +1,6 @@
 import type {
   BulkProjectResult,
+  BuildResult,
   CreateGroupRequest,
   DetectProjectResponse,
   DomainEvent,
@@ -8,6 +9,7 @@ import type {
   ErrorCode,
   ExportBundle,
   ImportConfigResponse,
+  LaunchPreview,
   LogRecord,
   NodeInstallation,
   OperationResult,
@@ -251,6 +253,14 @@ export class EngineClient {
 
   getNodeVersions(): Promise<NodeInstallation[]> {
     return this.request('GET', '/system/node-versions');
+  }
+
+  getLaunchPreview(id: string): Promise<LaunchPreview> {
+    return this.request('GET', `/projects/${encodeURIComponent(id)}/launch-preview`);
+  }
+
+  buildProject(id: string): Promise<BuildResult> {
+    return this.request('POST', `/projects/${encodeURIComponent(id)}/build`, {});
   }
 
   listTunnels(): Promise<TunnelSummary[]> {
