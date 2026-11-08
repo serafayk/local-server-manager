@@ -19,6 +19,9 @@ export interface CertificateManagerOptions {
   logger: Logger;
   now?: () => number;
   runCertutil?: (args: string[]) => Promise<{ code: number; stdout: string; stderr: string }>;
+  /** Instala a CA; separado porque o Windows exige confirmação visível. */
+  runTrust?: (derFile: string) => Promise<{ code: number; stderr: string }>;
+  trustTimeoutMs?: number;
 }
 
 export interface CertificatePair {
@@ -37,6 +40,8 @@ export class CertificateManager {
   private readonly hostsDir: string;
   private readonly now: () => number;
   private readonly runCertutil: NonNullable<CertificateManagerOptions['runCertutil']>;
+  private readonly runTrust: NonNullable<CertificateManagerOptions['runTrust']>;
+  private readonly trustTimeoutMs: number;
   private ca: CertificatePair | null = null;
   private readonly contexts = new Map<string, SecureContext>();
 
@@ -47,6 +52,9 @@ export class CertificateManager {
     this.hostsDir = join(options.certsDir, 'hosts');
     this.now = options.now ?? (() => Date.now());
     this.runCertutil = options.runCertutil ?? runCertutilProcess;
+    this.runTrust =
+      options.runTrust ?? ((file) => runTrustWithPrompt(file, options.trustTimeoutMs ?? 90_000));
+    this.trustTimeoutMs = options.trustTimeoutMs ?? 90_000;
   }
 
   get caPath(): string {
@@ -185,21 +193,25 @@ export class CertificateManager {
     };
   }
 
-  /** Instala a CA no repositório do usuário (sem UAC). */
+  /** Instala a CA no repositório do usuário (Windows pede confirmação visual). */
   async trust(): Promise<void> {
     await this.ensureCa();
     if (!existsSync(this.caDerFile)) {
       writeFileSync(this.caDerFile, pemToDer(readFileSync(this.caCertFile, 'utf8')));
     }
-    const result = await this.runCertutil(['-addstore', '-user', 'Root', this.caDerFile]);
+    const result = await this.runTrust(this.caDerFile);
     if (result.code !== 0) {
+      const detail = result.stderr.trim();
+      const timedOut = /tempo esgotado/i.test(detail) || result.code === 124;
       throw new AppError(
         'CERTIFICATE_ERROR',
-        `Não foi possível confiar na CA local: ${result.stderr.trim() || 'certutil falhou'}`,
+        timedOut
+          ? `A confirmação do Windows não apareceu em ${Math.round(this.trustTimeoutMs / 1_000)}s. Clique em "Confiar na CA" novamente e aceite o aviso de segurança.`
+          : `Não foi possível confiar na CA local: ${detail || 'cancelado'}`,
       );
     }
     if (!(await this.isTrusted())) {
-      throw new AppError('CERTIFICATE_ERROR', 'certutil não confirmou a instalação da CA local');
+      throw new AppError('CERTIFICATE_ERROR', 'O Windows não confirmou a instalação da CA local');
     }
     this.options.logger.info('CA local confiada no repositório do usuário');
   }
@@ -266,5 +278,49 @@ function runCertutilProcess(
     });
     child.on('error', (error) => resolvePromise({ code: 1, stdout, stderr: error.message }));
     child.on('close', (code) => resolvePromise({ code: code ?? 1, stdout, stderr }));
+  });
+}
+
+/**
+ * Instala a CA com a janela de confirmação do Windows visível.
+ *
+ * `certutil -addstore` abre o "Aviso de Segurança" ao gravar em Root; rodar com
+ * a janela oculta deixaria o processo pendurado para sempre. O PowerShell faz
+ * `Start-Process` sem esconder a janela e aplica timeout.
+ */
+function runTrustWithPrompt(
+  derFile: string,
+  timeoutMs: number,
+): Promise<{ code: number; stderr: string }> {
+  const escaped = derFile.replace(/'/g, "''");
+  const script = [
+    `$p = Start-Process -FilePath 'certutil.exe'`,
+    `-ArgumentList @('-addstore','-user','Root','${escaped}')`,
+    `-Wait -PassThru; exit $p.ExitCode`,
+  ].join(' ');
+
+  return new Promise((resolvePromise) => {
+    const child = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      { windowsHide: false },
+    );
+    let stderr = '';
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf8');
+    });
+    const timer = setTimeout(() => {
+      child.kill();
+      resolvePromise({ code: 124, stderr: 'Tempo esgotado aguardando confirmação do Windows.' });
+    }, timeoutMs);
+    timer.unref();
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      resolvePromise({ code: 1, stderr: error.message });
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      resolvePromise({ code: code ?? 1, stderr });
+    });
   });
 }

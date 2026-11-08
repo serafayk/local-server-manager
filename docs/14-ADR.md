@@ -14,7 +14,7 @@ Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicion
 2. **Roteamento por `Host`** a partir da tabela `domains` (`host` único → projeto/porta opcional). Domínio não cadastrado recebe 404; projeto parado recebe 502 explicativo; projeto sem porta recebe 502 com orientação.
 3. **Dois sufixos:** `.lsm` (bonito, exige arquivo hosts) e `.localhost` (resolve em qualquer navegador sem configuração). O alias `.localhost` de uma rota `.lsm` é servido automaticamente, então o link funciona antes do UAC.
 4. **Arquivo hosts gerenciado** por um bloco delimitado; a sincronização é em lote e usa um único prompt de UAC (`Start-Process -Verb RunAs`), nunca edição manual.
-5. **CA local no CurrentUser\Root** (sem UAC) e folha por host emitida sob demanda, com SAN do domínio e do alias. Confiar na CA é ação explícita do usuário; o Engine não altera a cadeia de confiança sozinho.
+5. **CA local no CurrentUser\Root** e folha por host emitida sob demanda, com SAN do domínio e do alias. Confiar na CA é ação explícita do usuário: o Windows exibe o "Aviso de Segurança" e a operação tem timeout, para não deixar a API pendurada.
 6. **Reescrita de `Host`/`Origin`** para `127.0.0.1:<porta>` no upstream, preservando o original em `x-forwarded-host`/`x-forwarded-proto`. Isso evita o bloqueio de `allowedHosts` do Vite e mantém validações CSRF coerentes.
 7. **WebSocket** é encaminhado por túnel TCP no evento `upgrade`, preservando HMR do Vite e do Next.
 

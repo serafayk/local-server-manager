@@ -143,8 +143,9 @@ O proxy escuta apenas em `127.0.0.1`, em HTTP na porta 8090 e HTTPS na 8443
 para a porta do projeto ou para uma porta específica da rota.
 
 **HTTPS:** clique em **Confiar na CA** uma vez. A CA é criada localmente e
-instalada no seu usuário (sem UAC); depois disso `https://api.uai.lsm:8443`
-abre sem aviso. Reinicie o navegador se ele já estava aberto.
+instalada no seu usuário (sem UAC); o Windows mostra um aviso de segurança —
+confirme para concluir. Depois disso `https://api.uai.lsm:8443` abre sem aviso.
+Reinicie o navegador se ele já estava aberto.
 
 Se o projeto estiver parado, o domínio responde com uma página explicando o
 motivo e a porta esperada. WebSocket/HMR passam pelo proxy normalmente.

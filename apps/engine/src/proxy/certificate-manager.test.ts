@@ -65,12 +65,12 @@ describe('CA e certificados locais', () => {
     const manager = new CertificateManager({
       certsDir: tempDir(),
       logger,
+      runTrust: async () => {
+        trusted = true;
+        return { code: 0, stderr: '' };
+      },
       runCertutil: async (args) => {
         calls.push(args);
-        if (args[0] === '-addstore') {
-          trusted = true;
-          return { code: 0, stdout: '', stderr: '' };
-        }
         return { code: trusted ? 0 : 1, stdout: '', stderr: '' };
       },
     });
@@ -81,6 +81,18 @@ describe('CA e certificados locais', () => {
     await manager.trust();
     expect(await manager.isTrusted()).toBe(true);
     expect(calls.some((args) => args.includes('Root'))).toBe(true);
+  });
+
+  it('devolve erro acionável quando a confirmação do Windows expira', async () => {
+    const manager = new CertificateManager({
+      certsDir: tempDir(),
+      logger,
+      trustTimeoutMs: 1_000,
+      runTrust: async () => ({ code: 124, stderr: 'Tempo esgotado' }),
+      runCertutil: async () => ({ code: 1, stdout: '', stderr: '' }),
+    });
+
+    await expect(manager.trust()).rejects.toThrowError(/confirmação do Windows/i);
   });
 
   it('rejeita CA com certificado corrompido e gera outra', async () => {

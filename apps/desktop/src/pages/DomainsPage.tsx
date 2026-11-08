@@ -139,10 +139,13 @@ export function DomainsPage() {
   const trustCa = useMutation({
     mutationFn: () => client.trustDomainCa(),
     onSuccess: () => {
-      setNotice('CA local confiada. Feche e reabra o navegador para o HTTPS valer.');
+      setNotice('CA local confiada. Feche e reabra o navegador para o HTTPS valer sem aviso.');
       invalidate();
     },
-    onError: (error) => setNotice(errorMessage(error)),
+    onError: (error) =>
+      setNotice(
+        `${errorMessage(error)} Se preferir, instale manualmente o certificado em ${status?.certificate.path ?? 'certs\\ca.crt'}.`,
+      ),
   });
 
   const pendingSync = status?.pendingHosts ?? [];
@@ -228,7 +231,7 @@ export function DomainsPage() {
             </div>
             <p className="mt-1 text-xs text-zinc-500">
               {status?.certificate.exists
-                ? 'Certificados emitidos por uma CA local.'
+                ? 'Certificados emitidos por uma CA local. O Windows pede confirmação ao confiar.'
                 : 'A CA será criada no primeiro uso.'}
             </p>
             <Button
@@ -236,8 +239,11 @@ export function DomainsPage() {
               className="mt-2"
               loading={trustCa.isPending}
               disabled={status?.certificate.trusted === true}
+              title="O Windows mostrará um aviso de segurança; confirme para confiar na CA local"
               onClick={() => {
-                setNotice(null);
+                setNotice(
+                  'Se o Windows pedir confirmação, aceite o aviso de segurança para concluir.',
+                );
                 trustCa.mutate();
               }}
             >
