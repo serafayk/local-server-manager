@@ -321,6 +321,27 @@ fn pick_folder(title: Option<String>) -> Option<String> {
     }
 }
 
+/// Encerra o Engine (e os processos gerenciados) para liberar os arquivos
+/// antes de uma atualização ou instalação. Usado também em Configurações.
+#[tauri::command]
+fn stop_engine() -> Result<bool, String> {
+    let info_path = engine_info_path();
+    let pid = match read_engine_pid(&info_path) {
+        Some(pid) => pid,
+        None => return Ok(false),
+    };
+    let output = Command::new("taskkill.exe")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .output()
+        .map_err(|error| format!("Falha ao encerrar o Engine: {error}"))?;
+    shell_log(&format!(
+        "stop_engine: pid {pid} encerrado (status {})",
+        output.status
+    ));
+    let _ = fs::remove_file(&info_path);
+    Ok(output.status.success())
+}
+
 /// Reinicia o Engine (usado após agendar uma restauração de backup).
 #[tauri::command]
 async fn restart_engine(app: AppHandle) -> Result<EngineApiInfo, String> {
@@ -401,6 +422,7 @@ pub fn run() {
             autostart_status,
             set_autostart,
             restart_engine,
+            stop_engine,
             pick_folder
         ])
         .run(tauri::generate_context!())

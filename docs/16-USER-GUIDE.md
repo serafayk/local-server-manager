@@ -11,6 +11,18 @@ O Engine roda separado da interface; fechar a janela **não** encerra os projeto
 
 Requisitos: Windows 10/11 64-bit, WebView2 (presente em instalações atualizadas).
 
+### Atualização
+
+Execute o setup da nova versão **por cima** da anterior. O instalador encerra o
+aplicativo e o **Engine** automaticamente (parando os projetos em execução) para
+liberar `resources\engine\node.exe`. **Não é necessário desinstalar antes.**
+
+- Desinstalar/reinstalar **não apaga** seus dados em
+  `%LOCALAPPDATA%\LocalServerManager` nem as pastas dos projetos.
+- Se quiser encerrar o Engine manualmente antes, use
+  **Configurações → Engine → Encerrar Engine**.
+- Depois de instalar, reabra o aplicativo e inicie os projetos.
+
 ## 2. Primeiro projeto
 
 Há dois caminhos.
@@ -160,12 +172,13 @@ quiser remover tudo. As pastas dos seus projetos nunca são tocadas.
 
 ## 12. Problemas comuns
 
-| Sintoma                     | O que verificar                                                     |
-| --------------------------- | ------------------------------------------------------------------- |
-| "Engine não encontrado"     | Inicie o Engine (`pnpm engine` em desenvolvimento) ou reabra o app. |
-| Projeto não sobe            | Diretório/executável, porta ocupada e logs do projeto.              |
-| "Porta já está em uso"      | Outro processo ocupa a porta. Encerre-o ou altere a porta.          |
-| "Build de produção ausente" | Use o script `dev` ou rode o build (`next build`).                  |
-| Logs sem atualização        | Indicador de conexão (canto superior); reconecte recarregando.      |
-| Restauração não aplicada    | É necessário reiniciar o Engine (o app faz automaticamente).        |
-| Autostart não aparece       | Recurso disponível apenas no app instalado (não no navegador).      |
+| Sintoma                       | O que verificar                                                                                |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- |
+| "Engine não encontrado"       | Inicie o Engine (`pnpm engine` em desenvolvimento) ou reabra o app.                            |
+| "node.exe em uso" ao instalar | O instalador 0.11.1+ encerra o Engine; em versões antigas use Configurações → Encerrar Engine. |
+| Projeto não sobe              | Diretório/executável, porta ocupada e logs do projeto.                                         |
+| "Porta já está em uso"        | Outro processo ocupa a porta. Encerre-o ou altere a porta.                                     |
+| "Build de produção ausente"   | Use o script `dev` ou rode o build (`next build`).                                             |
+| Logs sem atualização          | Indicador de conexão (canto superior); reconecte recarregando.                                 |
+| Restauração não aplicada      | É necessário reiniciar o Engine (o app faz automaticamente).                                   |
+| Autostart não aparece         | Recurso disponível apenas no app instalado (não no navegador).                                 |

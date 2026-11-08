@@ -69,6 +69,9 @@ export function SettingsPage() {
   const [configError, setConfigError] = useState<string | null>(null);
   const [configNotice, setConfigNotice] = useState<string | null>(null);
   const [importResults, setImportResults] = useState<ImportConfigResult[]>([]);
+  const [stopEngineOpen, setStopEngineOpen] = useState(false);
+  const [engineNotice, setEngineNotice] = useState<string | null>(null);
+  const [engineError, setEngineError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -236,38 +239,63 @@ export function SettingsPage() {
           ) : infoQuery.error ? (
             <ErrorBanner message={infoQuery.error.message} />
           ) : info ? (
-            <dl className="grid gap-3 text-sm">
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-zinc-500">PID</dt>
-                <dd className="mono mt-0.5 text-xs text-zinc-200">{info.pid}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-zinc-500">
-                  Diretório de dados
-                </dt>
-                <dd className="mono mt-0.5 break-all text-xs text-zinc-200">{info.dataDir}</dd>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+            <>
+              <dl className="grid gap-3 text-sm">
                 <div>
-                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Iniciado em</dt>
-                  <dd className="mt-0.5 text-xs text-zinc-200">{formatDateTime(info.startedAt)}</dd>
+                  <dt className="text-xs uppercase tracking-wide text-zinc-500">PID</dt>
+                  <dd className="mono mt-0.5 text-xs text-zinc-200">{info.pid}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Projetos</dt>
-                  <dd className="mt-0.5 text-xs text-zinc-200">{info.projects}</dd>
+                  <dt className="text-xs uppercase tracking-wide text-zinc-500">
+                    Diretório de dados
+                  </dt>
+                  <dd className="mono mt-0.5 break-all text-xs text-zinc-200">{info.dataDir}</dd>
                 </div>
-              </div>
-              {settingsQuery.data ? (
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Encerramento</dt>
-                  <dd className="mt-0.5 text-xs text-zinc-300">
-                    {settingsQuery.data.shutdownBehavior === 'stop-all'
-                      ? 'Para todos os projetos ao encerrar o Engine'
-                      : 'Mantém projetos rodando'}
-                  </dd>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <dt className="text-xs uppercase tracking-wide text-zinc-500">Iniciado em</dt>
+                    <dd className="mt-0.5 text-xs text-zinc-200">
+                      {formatDateTime(info.startedAt)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs uppercase tracking-wide text-zinc-500">Projetos</dt>
+                    <dd className="mt-0.5 text-xs text-zinc-200">{info.projects}</dd>
+                  </div>
+                </div>
+                {settingsQuery.data ? (
+                  <div>
+                    <dt className="text-xs uppercase tracking-wide text-zinc-500">Encerramento</dt>
+                    <dd className="mt-0.5 text-xs text-zinc-300">
+                      {settingsQuery.data.shutdownBehavior === 'stop-all'
+                        ? 'Para todos os projetos ao encerrar o Engine'
+                        : 'Mantém projetos rodando'}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+              {isTauri ? (
+                <div className="mt-3 space-y-2">
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => {
+                      setEngineError(null);
+                      setEngineNotice(null);
+                      setStopEngineOpen(true);
+                    }}
+                  >
+                    Encerrar Engine
+                  </Button>
+                  <p className="text-[11px] text-zinc-500">
+                    Libera os arquivos para instalar uma atualização. Os projetos em execução são
+                    parados.
+                  </p>
+                  {engineNotice ? <p className="text-xs text-emerald-300">{engineNotice}</p> : null}
+                  {engineError ? <ErrorBanner message={engineError} /> : null}
                 </div>
               ) : null}
-            </dl>
+            </>
           ) : null}
         </Card>
 
@@ -509,6 +537,43 @@ export function SettingsPage() {
           {isTauri
             ? ' O Engine será reiniciado automaticamente.'
             : ' Reinicie o Engine (pnpm engine) para aplicar.'}
+        </p>
+      </Dialog>
+
+      <Dialog
+        open={stopEngineOpen}
+        onClose={() => setStopEngineOpen(false)}
+        title="Encerrar o Engine"
+        description="O aplicativo continuará aberto, mas sem Engine até ser reaberto."
+        size="md"
+        footer={
+          <>
+            <Button onClick={() => setStopEngineOpen(false)}>Cancelar</Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                void (async () => {
+                  try {
+                    await invokeTauri<boolean>('stop_engine');
+                    setStopEngineOpen(false);
+                    setEngineNotice(
+                      'Engine encerrado. Reabra o aplicativo para iniciá-lo novamente.',
+                    );
+                  } catch (error) {
+                    setStopEngineOpen(false);
+                    setEngineError(error instanceof Error ? error.message : String(error));
+                  }
+                })();
+              }}
+            >
+              Encerrar
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-zinc-300">
+          Encerrar o Engine e <span className="font-semibold">parar todos os projetos</span> em
+          execução? Use isto antes de instalar uma atualização.
         </p>
       </Dialog>
     </div>

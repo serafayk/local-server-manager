@@ -2,6 +2,16 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.11.1] — 2026-11-08
+
+### Instalação sobre um Engine em execução
+
+- Hook `NSIS_HOOK_PREINSTALL` encerra o app e o Engine (incluindo os processos gerenciados)
+  antes de copiar arquivos, liberando `resources\engine\node.exe`.
+- O mesmo encerramento foi adicionado ao `PREUNINSTALL`.
+- Novo comando Tauri `stop_engine` e botão **Configurações → Engine → Encerrar Engine**.
+- Guia do usuário documenta atualização sem desinstalar e preservação de dados.
+
 ## [0.11.0] — 2026-11-08
 
 ### Fase 10 — Túneis Cloudflare supervisionados
