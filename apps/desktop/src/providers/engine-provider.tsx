@@ -8,10 +8,13 @@ import { resolveEngineEndpoint } from '../lib/engine-endpoint';
 import { applyEngineEvent } from '../lib/event-handler';
 import { queryKeys } from '../lib/queries';
 import { EngineSocket, type ConnectionStatus } from '../lib/socket';
-
+import { isTauriRuntime } from '../lib/tauri';
 interface EngineContextValue {
   client: EngineClient;
   endpoint: EngineEndpoint;
+  isTauri: boolean;
+  /** Reexecuta a descoberta (usado após reiniciar o Engine). */
+  reload: () => void;
 }
 
 const EngineContext = createContext<EngineContextValue | null>(null);
@@ -41,6 +44,8 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [resolving, setResolving] = useState(true);
   const [attempt, setAttempt] = useState(0);
+  const isTauri = isTauriRuntime();
+  const reload = (): void => setAttempt((value) => value + 1);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,5 +152,9 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  return <EngineContext.Provider value={{ client, endpoint }}>{children}</EngineContext.Provider>;
+  return (
+    <EngineContext.Provider value={{ client, endpoint, isTauri, reload }}>
+      {children}
+    </EngineContext.Provider>
+  );
 }

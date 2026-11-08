@@ -2,6 +2,23 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.7.0] — 2026-11-08
+
+### Fase 6 — Distribuição e operação no Windows
+
+- Autostart via Agendador de Tarefas (`ONLOGON`, `LIMITED`, sem admin), com toggle em Configurações e status real.
+- Desinstalador remove a tarefa de autostart via hook NSIS e preserva `%LOCALAPPDATA%` e pastas dos projetos.
+- Backup do SQLite com checkpoint do WAL, listagem e criação pela API/UI.
+- Restauração adiada para o próximo boot (marcador + backup pré-restore), com reinício automático do Engine no app Tauri.
+- Comandos Tauri `autostart_status`, `set_autostart` e `restart_engine`; testes unitários do comando de tarefa e do parser de PID.
+- Instalador NSIS por usuário (`installMode: currentUser`) com recursos do Engine.
+- Guia do usuário (`docs/16-USER-GUIDE.md`).
+- 6 novos testes JS; total de 251. `cargo test` 2/2.
+
+### Limitações desta versão
+
+- Assinatura de código e updater automático ficam para a Fase 7.
+
 ## [0.6.0] — 2026-11-08
 
 ### Fase 5 — Monitoramento

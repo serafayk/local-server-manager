@@ -70,6 +70,9 @@ gerado pelo Engine. Não retornar stack trace; o stack completo fica no log inte
 | PUT    | `/api/v1/settings`               | Atualiza configuração                      |
 | GET    | `/api/v1/ws`                     | WebSocket de eventos                       |
 | GET    | `/api/v1/system/metrics`         | Métricas atuais dos processos              |
+| POST   | `/api/v1/system/backup`          | Cria backup do SQLite                      |
+| GET    | `/api/v1/system/backups`         | Lista backups disponíveis                  |
+| POST   | `/api/v1/system/restore`         | Agenda restauração para o próximo boot     |
 | GET    | `/api/v1/ports`                  | Ocupação das portas configuradas           |
 | GET    | `/api/v1/ports/:port`            | Ocupação de uma porta                      |
 

@@ -25,6 +25,7 @@ import { LogManager } from '../log-manager/log-manager';
 import { runLogRetention } from '../log-manager/log-retention';
 import { ProcessManager } from '../process-manager/process-manager';
 import { MetricsCollector } from '../metrics/metrics-collector';
+import { applyPendingRestore, BackupManager } from '../backup/backup-manager';
 import { ProjectService } from '../supervisor/project-service';
 import { Supervisor } from '../supervisor/supervisor';
 import { reconcileInstances } from './reconciliation';
@@ -54,6 +55,7 @@ export interface Engine {
   readonly supervisor: Supervisor;
   readonly projects: ProjectService;
   readonly metrics: MetricsCollector;
+  readonly backups: BackupManager;
   start(): Promise<void>;
   shutdown(reason?: string): Promise<void>;
   info(): EngineInfo;
@@ -75,7 +77,28 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
       sinks: [createStreamSink(process.stdout), createFileSink(paths.engineLogFile)],
     });
 
+  // Restauração pendente é aplicada com o banco fechado, antes de abrir.
+  applyPendingRestore({
+    databaseFile: paths.databaseFile,
+    backupsDir: paths.backupsDir,
+    restoreMarkerFile: paths.restoreMarkerFile,
+    logger,
+  });
+
   const db = openDatabase({ file: paths.databaseFile });
+  const backups = new BackupManager({
+    databaseFile: paths.databaseFile,
+    backupsDir: paths.backupsDir,
+    restoreMarkerFile: paths.restoreMarkerFile,
+    logger,
+    checkpoint: () => {
+      try {
+        db.connection.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+      } catch {
+        // checkpoint best-effort
+      }
+    },
+  });
   const repositories = createRepositories(db.connection);
   const events = new EventBus(clock, logger);
   const logManager = new LogManager({
@@ -186,6 +209,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     supervisor,
     projects,
     metrics,
+    backups,
 
     async start(): Promise<void> {
       if (started || starting) {
@@ -236,6 +260,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
           clock,
           logger,
           metrics,
+          backups,
           engineInfo: () => engine.info(),
           getSettings: () => engineSettings,
           updateSettings: (input: unknown): EngineSettings => {

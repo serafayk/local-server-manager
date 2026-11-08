@@ -6,7 +6,16 @@ Windows 10/11 64-bit como primeira plataforma. Encapsular particularidades em ad
 
 ## 2. Engine em background
 
-MVP:
+Implementado na Fase 6 (ADR-017):
+
+- o Engine é empacotado como recurso do app (`node.exe` + `engine.mjs`);
+- o shell Tauri oferece **Iniciar o Engine no login** em Configurações, criando a tarefa
+  `Local Server Manager Engine` com `schtasks /SC ONLOGON /RL LIMITED`;
+- o padrão é desligado; habilitar/desabilitar é explícito e registrado em `shell.log`;
+- o desinstalador remove a tarefa via hook NSIS;
+- instância única continua garantida pelo lock do Engine.
+
+MVP (histórico):
 
 - instalar Engine junto com o aplicativo;
 - registrar tarefa no Agendador de Tarefas para iniciar no login do usuário;
@@ -63,7 +72,9 @@ Atualizar desktop e Engine de forma coordenada. Não substituir binários enquan
 
 ## 9. Desinstalação
 
-- oferecer opção de manter configurações e logs;
-- remover tarefa de inicialização;
-- não apagar pastas dos projetos gerenciados;
-- não apagar dados do usuário sem confirmação.
+Implementado via NSIS (ADR-017):
+
+- o desinstalador remove a tarefa de autostart (`schtasks /Delete`);
+- **não** apaga `%LOCALAPPDATA%\LocalServerManager` nem as pastas dos projetos;
+- o usuário pode remover os dados manualmente após desinstalar;
+- o instalador é por usuário (`currentUser`), sem exigir administrador.

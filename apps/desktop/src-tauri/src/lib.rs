@@ -23,8 +23,18 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
 
 const ENGINE_READY_TIMEOUT: Duration = Duration::from_secs(20);
+const AUTOSTART_TASK: &str = "Local Server Manager Engine";
 
 static ENSURE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn autostart_task_command(node: &Path, script: &Path) -> String {
+    format!("\"{}\" \"{}\"", node.display(), script.display())
+}
+
+fn parse_engine_pid(text: &str) -> Option<u32> {
+    let value: serde_json::Value = serde_json::from_str(text).ok()?;
+    value.get("pid")?.as_u64().and_then(|pid| u32::try_from(pid).ok())
+}
 
 /// `resource_dir()` pode vir com prefixo verbatim do Windows (`\\?\`), que o
 /// Node não aceita como caminho de script. Remove o prefixo preservando UNC.
@@ -202,6 +212,96 @@ fn engine_info() -> Option<EngineApiInfo> {
     read_engine_api(&engine_info_path())
 }
 
+fn read_engine_pid(path: &Path) -> Option<u32> {
+    fs::read_to_string(path).ok().and_then(|text| parse_engine_pid(&text))
+}
+
+fn autostart_task_exists() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("schtasks.exe")
+            .args(["/Query", "/TN", AUTOSTART_TASK])
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        false
+    }
+}
+
+#[tauri::command]
+fn autostart_status() -> bool {
+    autostart_task_exists()
+}
+
+#[tauri::command]
+fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, String> {
+    #[cfg(target_os = "windows")]
+    {
+        if enabled {
+            let (node, script) = engine_assets(&app).ok_or_else(|| {
+                "Recursos do Engine não encontrados; execute `pnpm prepare:engine`.".to_string()
+            })?;
+            let task_command = autostart_task_command(&node, &script);
+            let output = Command::new("schtasks.exe")
+                .args([
+                    "/Create",
+                    "/TN",
+                    AUTOSTART_TASK,
+                    "/SC",
+                    "ONLOGON",
+                    "/TR",
+                    &task_command,
+                    "/RL",
+                    "LIMITED",
+                    "/F",
+                ])
+                .output()
+                .map_err(|error| format!("Falha ao executar schtasks: {error}"))?;
+            if !output.status.success() {
+                return Err(format!(
+                    "schtasks falhou: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                ));
+            }
+            shell_log(&format!("autostart habilitado: {task_command}"));
+            return Ok(true);
+        }
+
+        let _ = Command::new("schtasks.exe")
+            .args(["/Delete", "/TN", AUTOSTART_TASK, "/F"])
+            .output();
+        shell_log("autostart desabilitado");
+        Ok(false)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (app, enabled);
+        Err("Autostart é suportado apenas no Windows".to_string())
+    }
+}
+
+/// Reinicia o Engine (usado após agendar uma restauração de backup).
+#[tauri::command]
+async fn restart_engine(app: AppHandle) -> Result<EngineApiInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let info_path = engine_info_path();
+        if let Some(pid) = read_engine_pid(&info_path) {
+            let _ = Command::new("taskkill.exe")
+                .args(["/PID", &pid.to_string(), "/T", "/F"])
+                .output();
+            shell_log(&format!("restart_engine: pid {pid} encerrado"));
+            thread::sleep(Duration::from_millis(500));
+        }
+        let _ = fs::remove_file(&info_path);
+        ensure_engine_blocking(&app)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
 fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
@@ -257,7 +357,37 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![ensure_engine, engine_info])
+        .invoke_handler(tauri::generate_handler![
+            ensure_engine,
+            engine_info,
+            autostart_status,
+            set_autostart,
+            restart_engine
+        ])
         .run(tauri::generate_context!())
         .expect("erro ao executar o Local Server Manager");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn autostart_command_quotes_both_paths() {
+        let value = autostart_task_command(
+            Path::new(r"C:\Program Files\nodejs\node.exe"),
+            Path::new(r"C:\App\engine.mjs"),
+        );
+        assert_eq!(
+            value,
+            r#""C:\Program Files\nodejs\node.exe" "C:\App\engine.mjs""#
+        );
+    }
+
+    #[test]
+    fn parses_engine_pid_from_json() {
+        assert_eq!(parse_engine_pid(r#"{"pid":4242,"protocolVersion":1}"#), Some(4242));
+        assert_eq!(parse_engine_pid(r#"{"protocolVersion":1}"#), None);
+        assert_eq!(parse_engine_pid("nao-json"), None);
+    }
 }

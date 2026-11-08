@@ -30,9 +30,14 @@ export const bulkProjectsRequestSchema = z.strictObject({
   projectIds: z.array(z.string().min(1).max(64)).min(1).max(500),
 });
 
+export const restoreBackupRequestSchema = z.strictObject({
+  file: z.string().trim().min(1).max(512),
+});
+
 export type DetectProjectInput = z.output<typeof detectProjectRequestSchema>;
 export type ImportProjectInput = z.output<typeof importProjectRequestSchema>;
 export type BulkProjectsInput = z.output<typeof bulkProjectsRequestSchema>;
+export type RestoreBackupInput = z.output<typeof restoreBackupRequestSchema>;
 
 function parse<T>(schema: z.ZodType<T>, input: unknown, label: string): T {
   const result = schema.safeParse(input);
@@ -59,4 +64,8 @@ export function parseImportProjectRequest(input: unknown): ImportProjectInput {
 
 export function parseBulkProjectsRequest(input: unknown): BulkProjectsInput {
   return parse(bulkProjectsRequestSchema, input, 'operações em lote');
+}
+
+export function parseRestoreBackupRequest(input: unknown): RestoreBackupInput {
+  return parse(restoreBackupRequestSchema, input, 'restauração de backup');
 }

@@ -2,6 +2,25 @@
 
 Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicionadas no topo com data, contexto, decisão, alternativas e consequências.
 
+## ADR-017 — Autostart, backup/restauração e distribuição Windows
+
+**Status:** Aceita (Fase 6)
+
+**Contexto:** O MVP precisa iniciar com o Windows, permitir desativar, preservar dados em upgrade/desinstalação e oferecer recuperação do SQLite.
+
+**Decisão:**
+
+1. **Autostart** via Agendador de Tarefas (`schtasks /SC ONLOGON /RL LIMITED`), tarefa `Local Server Manager Engine`, comandada pelo shell Tauri (`autostart_status`/`set_autostart`) e apontando para os recursos empacotados (`node.exe` + `engine.mjs`). Padrão **desligado**; o usuário habilita em Configurações. O desinstalador remove a tarefa via hook NSIS.
+2. **Backup** = `PRAGMA wal_checkpoint(TRUNCATE)` + cópia para `backups/manager-<timestamp>.sqlite`. Listagem e criação pela API e pela UI.
+3. **Restauração é adiada**: a API grava `engine/restore.json`; no próximo boot, com o banco fechado, o Engine cria um backup `manager-pre-restore-*`, remove WAL/SHM antigos, copia o backup sobre o banco e apaga o marcador. Marcador inválido é descartado e o banco atual é preservado.
+4. **Reinício do Engine** pelo shell (`restart_engine`): a UI para os projetos graciosamente, agenda o restore, mata a árvore do Engine e chama `ensure_engine`. No modo navegador, o usuário reinicia manualmente.
+5. **Instalador NSIS por usuário** (`installMode: currentUser`, sem admin), com ícones e recursos do Engine. A desinstalação remove a tarefa de autostart e **preserva** `%LOCALAPPDATA%\LocalServerManager` e as pastas dos projetos.
+6. **Upgrade**: o Engine só é substituído junto com o app; dados ficam fora do diretório de instalação; migrações têm backup automático; rollback = reinstalar a versão anterior.
+
+**Alternativas consideradas:** serviço Windows (exige wrapper e privilégios; Fase 7); autostart por pasta Startup (menos controle/visibilidade); restore em quente (arriscado com conexões abertas).
+
+**Consequências:** Sem admin, o app instala no perfil do usuário e o autostart ocorre no login (não antes dele). O restore exige reinício do Engine. O desinstalador não apaga dados sem ação manual.
+
 ## ADR-016 — Health check, portas e métricas
 
 **Status:** Aceita (Fase 5)

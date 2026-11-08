@@ -437,6 +437,22 @@ describe('API local — monitoramento', () => {
     await apiCall(api, 'POST', `/api/v1/projects/${project.id}/stop`);
   });
 
+  it('cria e lista backups', async () => {
+    const { api } = await boot();
+
+    const created = await apiCall<{ file: string; sizeBytes: number }>(
+      api,
+      'POST',
+      '/api/v1/system/backup',
+    );
+    expect(created.status).toBe(201);
+    const backup = expectData(created.result);
+    expect(backup.sizeBytes).toBeGreaterThan(0);
+
+    const list = await apiCall<Array<{ file: string }>>(api, 'GET', '/api/v1/system/backups');
+    expect(expectData(list.result).some((item) => item.file === backup.file)).toBe(true);
+  });
+
   it('consulta ocupação de porta sem matar o ocupante', async () => {
     const { api } = await boot();
     const port = await reservePort();

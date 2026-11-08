@@ -47,6 +47,18 @@ export interface BulkResponse {
   results: BulkProjectResult[];
 }
 
+export interface BackupInfo {
+  file: string;
+  path: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+export interface RestoreRequestResult {
+  file: string;
+  restartRequired: true;
+}
+
 export interface DetectRequest {
   directory: string;
 }
@@ -184,6 +196,18 @@ export class EngineClient {
 
   getInfo(): Promise<EngineInfo> {
     return this.request('GET', '/info');
+  }
+
+  createBackup(): Promise<BackupInfo> {
+    return this.request('POST', '/system/backup');
+  }
+
+  listBackups(): Promise<BackupInfo[]> {
+    return this.request('GET', '/system/backups');
+  }
+
+  requestRestore(file: string): Promise<RestoreRequestResult> {
+    return this.request('POST', '/system/restore', { file });
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {

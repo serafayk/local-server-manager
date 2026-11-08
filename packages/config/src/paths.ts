@@ -15,6 +15,7 @@ export interface AppPaths {
   engineDir: string;
   engineLogFile: string;
   engineInfoFile: string;
+  restoreMarkerFile: string;
   engineLockKey: string;
 }
 
@@ -51,6 +52,7 @@ export function resolveAppPaths(options: ResolveAppPathsOptions = {}): AppPaths 
     engineDir: join(root, 'engine'),
     engineLogFile: join(root, 'engine', 'engine.log'),
     engineInfoFile: join(root, 'engine', 'engine.json'),
+    restoreMarkerFile: join(root, 'engine', 'restore.json'),
     engineLockKey: createInstanceLockKey(root),
   };
 }

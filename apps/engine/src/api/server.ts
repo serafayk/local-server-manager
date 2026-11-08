@@ -18,9 +18,11 @@ import {
   parseBulkProjectsRequest,
   parseDetectProjectRequest,
   parseImportProjectRequest,
+  parseRestoreBackupRequest,
 } from '@lsm/validation';
 import type { EventBus } from '../core/event-bus';
 import { runWithConcurrency } from '../core/concurrency';
+import type { BackupManager } from '../backup/backup-manager';
 import type { LogManager } from '../log-manager/log-manager';
 import type { MetricsCollector } from '../metrics/metrics-collector';
 import { checkPort } from '../ports/port-checker';
@@ -49,6 +51,7 @@ export interface ApiServerOptions {
   clock: Clock;
   logger: Logger;
   metrics: MetricsCollector;
+  backups: BackupManager;
   engineInfo: () => EngineInfo;
   getSettings: () => EngineSettings;
   updateSettings: (input: unknown) => EngineSettings;
@@ -294,6 +297,19 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
     instance.get('/api/v1/system/metrics', async (request, reply) => {
       const snapshot = options.metrics.latest() ?? (await options.metrics.collectNow());
       return sendSuccess(reply, snapshot, requestIdOf(request));
+    });
+
+    instance.post('/api/v1/system/backup', async (request, reply) => {
+      return sendSuccess(reply, options.backups.create(), requestIdOf(request), 201);
+    });
+
+    instance.get('/api/v1/system/backups', async (request, reply) => {
+      return sendSuccess(reply, options.backups.list(), requestIdOf(request));
+    });
+
+    instance.post('/api/v1/system/restore', async (request, reply) => {
+      const body = parseRestoreBackupRequest(request.body);
+      return sendSuccess(reply, options.backups.requestRestore(body.file), requestIdOf(request));
     });
 
     instance.get('/api/v1/ports/:port', async (request, reply) => {

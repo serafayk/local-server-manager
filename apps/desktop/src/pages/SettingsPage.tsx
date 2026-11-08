@@ -1,15 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useConnectionStatus, useEngine } from '../providers/engine-provider';
-import { formatDateTime } from '../lib/format';
+import type { BackupInfo } from '../lib/api';
+import { formatBytes, formatDateTime } from '../lib/format';
+import { invokeTauri } from '../lib/tauri';
 import { useEngineSettings } from '../lib/hooks';
 import { queryKeys } from '../lib/queries';
 import { PageHeader } from '../components/page';
 import { ConnectionBadge } from '../components/layout';
-import { Button, Card, ErrorBanner, Field, Input, Select } from '../components/ui';
+import {
+  Button,
+  Card,
+  Checkbox,
+  Dialog,
+  ErrorBanner,
+  Field,
+  Input,
+  Select,
+} from '../components/ui';
 
 export function SettingsPage() {
-  const { client, endpoint } = useEngine();
+  const { client, endpoint, isTauri, reload } = useEngine();
   const queryClient = useQueryClient();
   const connection = useConnectionStatus();
   const settingsQuery = useEngineSettings();
@@ -47,6 +58,91 @@ export function SettingsPage() {
   });
 
   const info = infoQuery.data;
+
+  const [autostart, setAutostart] = useState<boolean | null>(null);
+  const [autostartBusy, setAutostartBusy] = useState(false);
+  const [autostartError, setAutostartError] = useState<string | null>(null);
+  const [backupError, setBackupError] = useState<string | null>(null);
+  const [backupNotice, setBackupNotice] = useState<string | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<BackupInfo | null>(null);
+
+  useEffect(() => {
+    if (!isTauri) {
+      return;
+    }
+    let cancelled = false;
+    invokeTauri<boolean>('autostart_status')
+      .then((value) => {
+        if (!cancelled) {
+          setAutostart(value);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setAutostartError(error instanceof Error ? error.message : String(error));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isTauri]);
+
+  async function toggleAutostart(enabled: boolean): Promise<void> {
+    setAutostartBusy(true);
+    setAutostartError(null);
+    try {
+      const value = await invokeTauri<boolean>('set_autostart', { enabled });
+      setAutostart(value);
+    } catch (error) {
+      setAutostartError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setAutostartBusy(false);
+    }
+  }
+
+  const backupsQuery = useQuery({
+    queryKey: ['backups'],
+    queryFn: () => client.listBackups(),
+  });
+
+  const createBackup = useMutation({
+    mutationFn: () => client.createBackup(),
+    onSuccess: () => {
+      setBackupNotice('Backup criado.');
+      void queryClient.invalidateQueries({ queryKey: ['backups'] });
+    },
+    onError: (error) => setBackupError(error.message),
+  });
+
+  const restore = useMutation({
+    mutationFn: async (file: string) => {
+      const projects = await client.listProjects();
+      const active = projects
+        .filter((project) =>
+          ['STARTING', 'RUNNING', 'STOPPING', 'RESTARTING'].includes(project.runtime.status),
+        )
+        .map((project) => project.config.id);
+      if (active.length > 0) {
+        await client.bulkStop(active);
+      }
+      const result = await client.requestRestore(file);
+      if (isTauri) {
+        await invokeTauri('restart_engine');
+        reload();
+      }
+      return result;
+    },
+    onSuccess: () => {
+      setRestoreTarget(null);
+      setBackupNotice(
+        isTauri
+          ? 'Backup restaurado; Engine reiniciado.'
+          : 'Backup agendado. Reinicie o Engine (pnpm engine) para aplicar.',
+      );
+      void queryClient.invalidateQueries();
+    },
+    onError: (error) => setBackupError(error.message),
+  });
 
   return (
     <div>
@@ -128,7 +224,97 @@ export function SettingsPage() {
             </dl>
           ) : null}
         </Card>
+
+        <Card title="Inicialização com o Windows">
+          {!isTauri ? (
+            <p className="text-sm text-zinc-500">
+              Disponível no aplicativo desktop. No modo navegador o autostart não pode ser alterado.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <Checkbox
+                label="Iniciar o Engine no login"
+                description="Cria uma tarefa no Agendador de Tarefas do Windows."
+                checked={autostart === true}
+                disabled={autostart === null || autostartBusy}
+                onChange={(checked) => {
+                  void toggleAutostart(checked);
+                }}
+              />
+              <p className="text-xs text-zinc-500">
+                Status:{' '}
+                {autostart === null ? 'consultando…' : autostart ? 'habilitado' : 'desabilitado'}
+              </p>
+              {autostartError ? <ErrorBanner message={autostartError} /> : null}
+            </div>
+          )}
+        </Card>
       </div>
+
+      <Card
+        className="mt-4"
+        title="Backup e restauração"
+        description="Cópias do SQLite em backups/. A restauração é aplicada quando o Engine reinicia."
+        actions={
+          <Button
+            variant="primary"
+            size="sm"
+            loading={createBackup.isPending}
+            onClick={() => {
+              setBackupError(null);
+              setBackupNotice(null);
+              createBackup.mutate();
+            }}
+          >
+            Criar backup
+          </Button>
+        }
+        bodyClassName="p-0"
+      >
+        {backupError ? (
+          <div className="p-3">
+            <ErrorBanner message={backupError} onDismiss={() => setBackupError(null)} />
+          </div>
+        ) : null}
+        {backupNotice ? (
+          <div className="p-3">
+            <div className="rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-200">
+              {backupNotice}
+            </div>
+          </div>
+        ) : null}
+        {backupsQuery.isLoading ? (
+          <p className="p-4 text-sm text-zinc-500">Carregando backups...</p>
+        ) : (backupsQuery.data ?? []).length === 0 ? (
+          <p className="p-4 text-sm text-zinc-500">Nenhum backup criado.</p>
+        ) : (
+          <ul className="divide-y divide-zinc-800/70">
+            {(backupsQuery.data ?? []).map((backup) => (
+              <li
+                key={backup.file}
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-xs"
+              >
+                <div className="min-w-0">
+                  <p className="mono truncate text-zinc-200">{backup.file}</p>
+                  <p className="text-zinc-500">
+                    {formatDateTime(backup.createdAt)} · {formatBytes(backup.sizeBytes)}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setBackupError(null);
+                    setBackupNotice(null);
+                    setRestoreTarget(backup);
+                  }}
+                >
+                  Restaurar
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       <Card className="mt-4" title="Configuração do Engine">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -163,7 +349,7 @@ export function SettingsPage() {
           <Field
             label="Intervalo de métricas (ms)"
             htmlFor="settings-metrics"
-            hint="Reservado para a Fase 5."
+            hint="Aplica em runtime; mínimo de 1 segundo."
           >
             <Input
               id="settings-metrics"
@@ -190,6 +376,41 @@ export function SettingsPage() {
           {saved ? <span className="text-xs text-emerald-300">Salvo.</span> : null}
         </div>
       </Card>
+
+      <Dialog
+        open={restoreTarget !== null}
+        onClose={() => setRestoreTarget(null)}
+        title="Restaurar backup"
+        description="Os projetos em execução serão parados e o banco atual será substituído."
+        size="md"
+        footer={
+          <>
+            <Button onClick={() => setRestoreTarget(null)}>Cancelar</Button>
+            <Button
+              variant="danger"
+              loading={restore.isPending}
+              onClick={() => {
+                if (restoreTarget) {
+                  setBackupError(null);
+                  restore.mutate(restoreTarget.file);
+                }
+              }}
+            >
+              Restaurar
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-zinc-300">
+          Restaurar <span className="mono">{restoreTarget?.file}</span>?
+        </p>
+        <p className="mt-2 text-xs text-zinc-500">
+          O banco atual é copiado para <span className="mono">backups/</span> antes da substituição.
+          {isTauri
+            ? ' O Engine será reiniciado automaticamente.'
+            : ' Reinicie o Engine (pnpm engine) para aplicar.'}
+        </p>
+      </Dialog>
     </div>
   );
 }
