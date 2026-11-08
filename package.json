@@ -6,6 +6,10 @@
   "description": "Gerenciador desktop Windows de projetos Node.js com Engine independente e supervisor próprio.",
   "license": "MIT",
   "author": "Bruno Serafim",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brunoserafimcontador-lgtm/local-server-manager.git"
+  },
   "packageManager": "pnpm@9.15.0",
   "engines": {
     "node": ">=24.0.0",
