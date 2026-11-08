@@ -65,6 +65,13 @@ describe('buildCreateBody', () => {
     expect(body.port).toBeNull();
     expect(body.portSource).toBe('none');
   });
+
+  it('inclui grupo no payload', () => {
+    const body = buildCreateBody({ ...validState(), groupId: 'grupo-1' }) as {
+      groupId: string | null;
+    };
+    expect(body.groupId).toBe('grupo-1');
+  });
 });
 
 describe('buildImportBody', () => {
@@ -163,5 +170,10 @@ describe('formStateFromConfig', () => {
     expect(state.startOnBoot).toBe(true);
     expect(state.maxRetries).toBe('7');
     expect(state.mode).toBe('custom');
+  });
+
+  it('preserva o grupo no roundtrip', () => {
+    const config = makeProjectConfig({ name: 'Com grupo', groupId: 'grupo-1' });
+    expect(formStateFromConfig(config).groupId).toBe('grupo-1');
   });
 });

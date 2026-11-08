@@ -16,6 +16,7 @@ import {
   type ProjectFormState,
 } from '../lib/payload';
 import { queryKeys } from '../lib/queries';
+import { useGroupsQuery, useNodeVersionsQuery } from '../lib/hooks';
 import { useEngine } from '../providers/engine-provider';
 import {
   Button,
@@ -50,6 +51,9 @@ export function ProjectForm({
   const { client } = useEngine();
   const queryClient = useQueryClient();
   const isEdit = Boolean(project);
+  const groupsQuery = useGroupsQuery();
+  const nodeVersionsQuery = useNodeVersionsQuery();
+  const detectedNodes = nodeVersionsQuery.data ?? [];
 
   const [state, setState] = useState<ProjectFormState>(() =>
     project ? formStateFromConfig(project) : emptyFormState(),
@@ -134,6 +138,10 @@ export function ProjectForm({
     state.mode === 'script'
       ? `${state.packageManager} run ${state.script || '?'} (resolvido pelo Engine)`
       : formatCommand(state.executable.trim() || '?', parseArgsText(state.argsText));
+
+  const currentNodePath = detectedNodes.some((node) => node.executable === state.executable)
+    ? state.executable
+    : '';
 
   return (
     <Dialog
@@ -232,6 +240,44 @@ export function ProjectForm({
               />
             </Field>
           </div>
+
+          <Field
+            label="Grupo"
+            htmlFor="project-group"
+            hint="Opcional; organização visual (não cria dependência)."
+          >
+            <Select
+              id="project-group"
+              value={state.groupId}
+              onChange={(event) => update('groupId', event.target.value)}
+            >
+              <option value="">Sem grupo</option>
+              {(groupsQuery.data ?? []).map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field
+            label="Grupo"
+            htmlFor="project-group"
+            hint="Opcional; organização visual (não cria dependência)."
+          >
+            <Select
+              id="project-group"
+              value={state.groupId}
+              onChange={(event) => update('groupId', event.target.value)}
+            >
+              <option value="">Sem grupo</option>
+              {(groupsQuery.data ?? []).map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
 
           <Field
             label="Diretório do projeto"
@@ -365,6 +411,28 @@ export function ProjectForm({
             </div>
           ) : (
             <>
+              <Field
+                label="Node instalado"
+                htmlFor="project-node"
+                hint="Preenche o caminho absoluto do node.exe (NVM, sistema ou Engine)."
+              >
+                <Select
+                  id="project-node"
+                  value={currentNodePath}
+                  onChange={(event) => {
+                    if (event.target.value !== '') {
+                      update('executable', event.target.value);
+                    }
+                  }}
+                >
+                  <option value="">Personalizado (use o campo abaixo)</option>
+                  {detectedNodes.map((node) => (
+                    <option key={node.executable} value={node.executable}>
+                      v{node.version} · {node.source}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
               <Field
                 label="Executável"
                 htmlFor="project-executable"

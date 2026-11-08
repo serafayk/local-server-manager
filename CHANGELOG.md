@@ -2,6 +2,21 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.8.0] — 2026-11-08
+
+### Fase 7 (parcial) — Melhorias
+
+- Grupos: CRUD completo na API/UI, filtro de projetos, campo no cadastro e start/stop em lote por grupo; excluir o grupo mantém os projetos.
+- Exportação de configurações em JSON sem IDs internos e sem valores de variáveis sensíveis (`maskedEnvironmentKeys`).
+- Importação validada por schema, com recriação de grupos por nome e resultado por projeto (conflito de nome não cancela os demais).
+- Detecção de instalações de Node (NVM for Windows, sistema e Engine) e seleção no cadastro.
+- API: `/groups`, `/projects/export`, `/projects/import-config`, `/system/node-versions`.
+- 12 novos testes; total de 263.
+
+### Backlog da Fase 7
+
+- Dependências reais entre projetos, perfis de configuração, Named Pipe/Job Objects, assinatura de código e updater automático.
+
 ## [0.7.0] — 2026-11-08
 
 ### Fase 6 — Distribuição e operação no Windows

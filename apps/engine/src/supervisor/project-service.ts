@@ -1,18 +1,35 @@
 import type { ListEventsOptions, SystemEvent } from '@lsm/database';
-import type { LogRecord, ProjectConfig, ProjectSummary } from '@lsm/contracts';
+import type {
+  ExportBundle,
+  ExportedProject,
+  ImportConfigResponse,
+  ImportConfigResult,
+  LogRecord,
+  ProjectConfig,
+  ProjectSummary,
+} from '@lsm/contracts';
 import { CURRENT_CONFIG_SCHEMA_VERSION } from '@lsm/contracts';
 import type { Repositories } from '@lsm/database';
 import type { Clock, Logger } from '@lsm/shared';
-import { AppError, newId } from '@lsm/shared';
-import { parseCreateProjectRequest, parseUpdateProjectRequest } from '@lsm/validation';
+import { AppError, isAppError, newId } from '@lsm/shared';
+import {
+  parseCreateProjectRequest,
+  parseExportBundle,
+  parseUpdateProjectRequest,
+} from '@lsm/validation';
 import type { EventBus } from '../core/event-bus';
 import type { LogManager } from '../log-manager/log-manager';
+import type { GroupService } from './group-service';
 import { isActiveStatus } from './project-runtime';
 import type { Supervisor } from './supervisor';
+
+const SENSITIVE_ENV_KEY =
+  /(pass(word|phrase)?|secret|token|api[_-]?key|apikey|authorization|cookie|credential|private[_-]?key|session)/i;
 
 export interface ProjectServiceDeps {
   repositories: Repositories;
   supervisor: Supervisor;
+  groups: GroupService;
   logManager: LogManager;
   events: EventBus;
   clock: Clock;
@@ -33,6 +50,9 @@ export class ProjectService {
 
   createProject(input: unknown): ProjectConfig {
     const fields = parseCreateProjectRequest(input);
+    if (fields.groupId !== null && !this.deps.repositories.groups.findById(fields.groupId)) {
+      throw new AppError('GROUP_NOT_FOUND', `Grupo não encontrado: ${fields.groupId}`);
+    }
     const now = this.deps.clock.nowIso();
     const config: ProjectConfig = {
       id: newId(),
@@ -84,6 +104,10 @@ export class ProjectService {
     }
 
     const config = parseUpdateProjectRequest(existing, input, this.deps.clock.nowIso());
+
+    if (config.groupId !== null && !this.deps.repositories.groups.findById(config.groupId)) {
+      throw new AppError('GROUP_NOT_FOUND', `Grupo não encontrado: ${config.groupId}`);
+    }
 
     this.deps.repositories.projects.update(config);
     this.deps.supervisor.registerProject(config);
@@ -157,6 +181,99 @@ export class ProjectService {
 
   listEvents(options: ListEventsOptions = {}): SystemEvent[] {
     return this.deps.repositories.events.list(options);
+  }
+
+  /** Exporta configurações sem segredos de ambiente. */
+  exportConfiguration(): ExportBundle {
+    const groupNames = new Map(
+      this.deps.repositories.groups.list().map((group) => [group.id, group.name]),
+    );
+
+    const projects: ExportedProject[] = this.deps.repositories.projects.list().map((config) => {
+      const environment: Record<string, string> = {};
+      const maskedEnvironmentKeys: string[] = [];
+      for (const [key, value] of Object.entries(config.environment)) {
+        if (SENSITIVE_ENV_KEY.test(key)) {
+          maskedEnvironmentKeys.push(key);
+        } else {
+          environment[key] = value;
+        }
+      }
+
+      return {
+        name: config.name,
+        description: config.description,
+        group: config.groupId ? (groupNames.get(config.groupId) ?? null) : null,
+        workingDirectory: config.workingDirectory,
+        runtime: config.runtime,
+        environment,
+        maskedEnvironmentKeys,
+        port: config.port,
+        portSource: config.portSource,
+        enabled: config.enabled,
+        startOnBoot: config.startOnBoot,
+        startupOrder: config.startupOrder,
+        restartPolicy: config.restartPolicy,
+        healthCheck: config.healthCheck,
+        logging: config.logging,
+        shutdown: config.shutdown,
+      };
+    });
+
+    return {
+      schemaVersion: 1,
+      exportedAt: this.deps.clock.nowIso(),
+      projects,
+    };
+  }
+
+  /** Importa um bundle exportado; uma falha não cancela os demais. */
+  importConfiguration(input: unknown): ImportConfigResponse {
+    const bundle = parseExportBundle(input);
+    const results: ImportConfigResult[] = [];
+
+    for (const item of bundle.projects) {
+      try {
+        const groupId = item.group ? this.deps.groups.ensureByName(item.group).id : null;
+        this.createProject({
+          name: item.name,
+          description: item.description ?? null,
+          groupId,
+          workingDirectory: item.workingDirectory,
+          runtime: item.runtime,
+          environment: item.environment ?? {},
+          port: item.port ?? null,
+          portSource:
+            item.portSource ?? (item.port !== null && item.port !== undefined ? 'fixed' : 'none'),
+          enabled: item.enabled ?? true,
+          startOnBoot: item.startOnBoot ?? false,
+          startupOrder: item.startupOrder ?? 0,
+          ...(item.restartPolicy !== undefined ? { restartPolicy: item.restartPolicy } : {}),
+          ...(item.healthCheck !== undefined ? { healthCheck: item.healthCheck } : {}),
+          ...(item.logging !== undefined ? { logging: item.logging } : {}),
+          ...(item.shutdown !== undefined ? { shutdown: item.shutdown } : {}),
+        });
+        results.push({ name: item.name, success: true });
+      } catch (error) {
+        results.push(
+          isAppError(error)
+            ? {
+                name: item.name,
+                success: false,
+                errorCode: error.code,
+                message: error.message,
+              }
+            : {
+                name: item.name,
+                success: false,
+                errorCode: 'INTERNAL_ERROR',
+                message: error instanceof Error ? error.message : String(error),
+              },
+        );
+      }
+    }
+
+    return { results };
   }
 
   tailLogs(projectIdOrName: string, limit = 50, instanceId?: string): TailLogsResult {

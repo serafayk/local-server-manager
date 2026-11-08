@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
 import { useProjectActions } from '../lib/actions';
-import { useProjectsQuery } from '../lib/hooks';
+import { useGroupsQuery, useProjectsQuery } from '../lib/hooks';
 import { ProjectForm } from '../components/ProjectForm';
 import { ProjectTable } from '../components/ProjectTable';
 import { PageHeader } from '../components/page';
@@ -24,10 +24,12 @@ export function ProjectsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const projectsQuery = useProjectsQuery();
+  const groupsQuery = useGroupsQuery();
   const actions = useProjectActions();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ProjectStatus>('all');
+  const [groupFilter, setGroupFilter] = useState('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [formOpen, setFormOpen] = useState(searchParams.get('new') === '1');
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
@@ -49,9 +51,10 @@ export function ProjectsPage() {
         project.config.name.toLowerCase().includes(query) ||
         project.config.workingDirectory.toLowerCase().includes(query);
       const matchesStatus = statusFilter === 'all' || project.runtime.status === statusFilter;
-      return matchesQuery && matchesStatus;
+      const matchesGroup = groupFilter === 'all' || project.config.groupId === groupFilter;
+      return matchesQuery && matchesStatus && matchesGroup;
     });
-  }, [projectsQuery.data, search, statusFilter]);
+  }, [projectsQuery.data, search, statusFilter, groupFilter]);
 
   function toggle(id: string): void {
     setSelected((previous) => {
@@ -134,6 +137,19 @@ export function ProjectsPage() {
           {STATUS_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
+            </option>
+          ))}
+        </Select>
+        <Select
+          aria-label="Filtrar por grupo"
+          value={groupFilter}
+          onChange={(event) => setGroupFilter(event.target.value)}
+          className="w-44"
+        >
+          <option value="all">Todos os grupos</option>
+          {(groupsQuery.data ?? []).map((group) => (
+            <option key={group.id} value={group.id}>
+              {group.name}
             </option>
           ))}
         </Select>

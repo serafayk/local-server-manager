@@ -53,6 +53,13 @@ gerado pelo Engine. Não retornar stack trace; o stack completo fica no log inte
 | POST   | `/api/v1/projects`               | Criar projeto                              |
 | POST   | `/api/v1/projects/detect`        | Ler `package.json`/lockfile                |
 | POST   | `/api/v1/projects/import`        | Criar a partir de uma pasta                |
+| GET    | `/api/v1/projects/export`        | Exportar configurações (sem segredos)      |
+| POST   | `/api/v1/projects/import-config` | Importar bundle de configurações           |
+| GET    | `/api/v1/groups`                 | Listar grupos                              |
+| POST   | `/api/v1/groups`                 | Criar grupo                                |
+| PUT    | `/api/v1/groups/:id`             | Renomear/reordenar grupo                   |
+| DELETE | `/api/v1/groups/:id`             | Remover grupo                              |
+| GET    | `/api/v1/system/node-versions`   | Instalações de Node detectadas             |
 | GET    | `/api/v1/projects/:id`           | Detalhar                                   |
 | PUT    | `/api/v1/projects/:id`           | Atualizar (parcial, mesclado)              |
 | DELETE | `/api/v1/projects/:id`           | Remover cadastro                           |

@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import {
   FolderKanban,
+  FolderTree,
   History,
   LayoutDashboard,
   RefreshCw,
@@ -24,6 +25,7 @@ const CONNECTION: Record<ConnectionStatus, { tone: Tone; label: string }> = {
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/projects', label: 'Projetos', icon: FolderKanban, end: false },
+  { to: '/groups', label: 'Grupos', icon: FolderTree, end: false },
   { to: '/logs', label: 'Logs', icon: ScrollText, end: false },
   { to: '/events', label: 'Eventos', icon: History, end: false },
   { to: '/settings', label: 'Configurações', icon: Settings, end: false },

@@ -64,19 +64,39 @@ describe('HealthMonitor', () => {
   });
 
   it('só marca UNHEALTHY após o failureThreshold', async () => {
-    const { monitor, changes, setOk } = setup({ failureThreshold: 2, intervalMs: 100 }, true);
+    let calls = 0;
+    let ok = true;
+    let callsAtUnhealthy = -1;
+    const changes: string[] = [];
+
+    const monitor = new HealthMonitor({
+      config: makeConfig({ failureThreshold: 2, intervalMs: 20 }),
+      clock: createSystemClock(),
+      probe: async () => {
+        calls += 1;
+        return { ok, detail: ok ? 'ok' : 'falhou' };
+      },
+      onChanged: (health) => {
+        changes.push(health);
+        if (health === 'HEALTHY') {
+          // a partir daqui todas as probes falham
+          ok = false;
+        }
+        if (health === 'UNHEALTHY') {
+          callsAtUnhealthy = calls;
+        }
+      },
+      onRestartRequested: () => undefined,
+    });
+
     try {
       monitor.start();
-      await waitFor(() => changes.some((change) => change.health === 'HEALTHY'), {
-        description: 'HEALTHY inicial',
-      });
-      setOk(false);
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      expect(changes.some((change) => change.health === 'UNHEALTHY')).toBe(false);
-      await waitFor(() => changes.some((change) => change.health === 'UNHEALTHY'), {
+      await waitFor(() => changes.includes('UNHEALTHY'), {
         timeoutMs: 2_000,
         description: 'UNHEALTHY após 2 falhas',
       });
+      // 1 probe saudável + 2 falhas consecutivas
+      expect(callsAtUnhealthy).toBe(3);
     } finally {
       monitor.stop();
     }

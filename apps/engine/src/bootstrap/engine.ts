@@ -27,6 +27,7 @@ import { ProcessManager } from '../process-manager/process-manager';
 import { MetricsCollector } from '../metrics/metrics-collector';
 import { applyPendingRestore, BackupManager } from '../backup/backup-manager';
 import { ProjectService } from '../supervisor/project-service';
+import { GroupService } from '../supervisor/group-service';
 import { Supervisor } from '../supervisor/supervisor';
 import { reconcileInstances } from './reconciliation';
 import { acquireInstanceLock, type InstanceLock } from './single-instance';
@@ -54,6 +55,7 @@ export interface Engine {
   readonly processManager: ProcessManager;
   readonly supervisor: Supervisor;
   readonly projects: ProjectService;
+  readonly groups: GroupService;
   readonly metrics: MetricsCollector;
   readonly backups: BackupManager;
   start(): Promise<void>;
@@ -117,9 +119,11 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     processManager,
     batchConcurrency: DEFAULT_ENGINE_SETTINGS.batchConcurrency,
   });
+  const groups = new GroupService({ repositories, clock, logger });
   const projects = new ProjectService({
     repositories,
     supervisor,
+    groups,
     logManager,
     events,
     clock,
@@ -208,6 +212,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     processManager,
     supervisor,
     projects,
+    groups,
     metrics,
     backups,
 
@@ -254,6 +259,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
           token: generateApiToken(),
           supervisor,
           projects,
+          groups,
           repositories,
           logManager,
           events,

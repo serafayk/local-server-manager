@@ -13,6 +13,23 @@ export function useProjectsQuery() {
   });
 }
 
+export function useGroupsQuery() {
+  const { client } = useEngine();
+  return useQuery({
+    queryKey: queryKeys.groups,
+    queryFn: () => client.listGroups(),
+  });
+}
+
+export function useNodeVersionsQuery() {
+  const { client } = useEngine();
+  return useQuery({
+    queryKey: queryKeys.nodeVersions,
+    queryFn: () => client.getNodeVersions(),
+    staleTime: 60_000,
+  });
+}
+
 export function useProjectQuery(id: string | undefined) {
   const { client } = useEngine();
   return useQuery({

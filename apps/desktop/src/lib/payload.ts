@@ -12,6 +12,7 @@ export interface ProjectFormState {
   name: string;
   description: string;
   directory: string;
+  groupId: string;
   mode: CommandMode;
   packageManager: PackageManager;
   script: string;
@@ -48,6 +49,7 @@ export function emptyFormState(): ProjectFormState {
     name: '',
     description: '',
     directory: '',
+    groupId: '',
     mode: 'custom',
     packageManager: 'npm',
     script: 'dev',
@@ -79,6 +81,7 @@ export function formStateFromConfig(config: ProjectConfig): ProjectFormState {
     name: config.name,
     description: config.description ?? '',
     directory: config.workingDirectory,
+    groupId: config.groupId ?? '',
     mode: 'custom',
     packageManager: 'npm',
     script: 'dev',
@@ -136,6 +139,7 @@ function buildSharedBody(state: ProjectFormState): Record<string, unknown> {
     name: state.name.trim(),
     description: state.description.trim() === '' ? null : state.description.trim(),
     workingDirectory: state.directory.trim(),
+    groupId: state.groupId.trim() === '' ? null : state.groupId.trim(),
     environment: buildEnvironment(state.environment),
     port,
     portSource: port === null ? 'none' : 'fixed',

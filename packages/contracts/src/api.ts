@@ -68,6 +68,65 @@ export interface EngineApiInfo {
   websocketPath: string;
 }
 
+export interface ProjectGroup {
+  id: string;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface CreateGroupRequest {
+  name: string;
+  sortOrder?: number;
+}
+
+export interface UpdateGroupRequest {
+  name?: string;
+  sortOrder?: number;
+}
+
+export interface ExportedProject {
+  name: string;
+  description: string | null;
+  group: string | null;
+  workingDirectory: string;
+  runtime: RuntimeConfig;
+  environment: Record<string, string>;
+  maskedEnvironmentKeys: string[];
+  port: number | null;
+  portSource: PortSource;
+  enabled: boolean;
+  startOnBoot: boolean;
+  startupOrder: number;
+  restartPolicy: RestartPolicy;
+  healthCheck: HealthCheckConfig;
+  logging: LoggingConfig;
+  shutdown: ShutdownConfig;
+}
+
+export interface ExportBundle {
+  schemaVersion: number;
+  exportedAt: string;
+  projects: ExportedProject[];
+}
+
+export interface ImportConfigResult {
+  name: string;
+  success: boolean;
+  errorCode?: string;
+  message?: string;
+}
+
+export interface ImportConfigResponse {
+  results: ImportConfigResult[];
+}
+
+export interface NodeInstallation {
+  version: string;
+  executable: string;
+  source: 'nvm' | 'system' | 'engine' | 'path';
+}
+
 export interface EngineInfo {
   pid: number;
   protocolVersion: number;

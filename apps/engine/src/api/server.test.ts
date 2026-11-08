@@ -8,6 +8,7 @@ import type {
   EngineSettings,
   OperationResult,
   ProjectConfig,
+  ProjectGroup,
   ProjectSummary,
   RuntimeSnapshot,
 } from '@lsm/contracts';
@@ -451,6 +452,101 @@ describe('API local — monitoramento', () => {
 
     const list = await apiCall<Array<{ file: string }>>(api, 'GET', '/api/v1/system/backups');
     expect(expectData(list.result).some((item) => item.file === backup.file)).toBe(true);
+  });
+
+  it('gerencia grupos e exporta configurações', async () => {
+    const { api } = await boot();
+
+    const group = expectData(
+      (await apiCall<ProjectGroup>(api, 'POST', '/api/v1/groups', { name: 'Backend' })).result,
+    );
+    const project = expectData(
+      (
+        await apiCall<ProjectConfig>(
+          api,
+          'POST',
+          '/api/v1/projects',
+          fixtureProjectBody({ groupId: group.id }),
+        )
+      ).result,
+    );
+    expect(project.groupId).toBe(group.id);
+
+    const renamed = expectData(
+      (
+        await apiCall<ProjectGroup>(api, 'PUT', `/api/v1/groups/${group.id}`, {
+          name: 'Serviços',
+        })
+      ).result,
+    );
+    expect(renamed.name).toBe('Serviços');
+
+    const duplicate = await apiCall(api, 'POST', '/api/v1/groups', { name: 'serviços' });
+    expect(duplicate.status).toBe(409);
+
+    const exported = expectData(
+      (
+        await apiCall<{ projects: Array<{ name: string; group: string | null }> }>(
+          api,
+          'GET',
+          '/api/v1/projects/export',
+        )
+      ).result,
+    );
+    expect(
+      exported.projects.some((item) => item.name === project.name && item.group === 'Serviços'),
+    ).toBe(true);
+
+    expect((await apiCall(api, 'DELETE', `/api/v1/groups/${group.id}`)).status).toBe(200);
+
+    const detail = expectData(
+      (await apiCall<{ config: ProjectConfig }>(api, 'GET', `/api/v1/projects/${project.id}`))
+        .result,
+    );
+    expect(detail.config.groupId).toBeNull();
+  });
+
+  it('exporta e importa configurações pela API', async () => {
+    const { api } = await boot();
+    const created = expectData(
+      (
+        await apiCall<ProjectConfig>(
+          api,
+          'POST',
+          '/api/v1/projects',
+          fixtureProjectBody({ name: 'Exportável' }),
+        )
+      ).result,
+    );
+    expect(created.name).toBe('Exportável');
+
+    const bundle = expectData(
+      (await apiCall<{ projects: unknown[] }>(api, 'GET', '/api/v1/projects/export')).result,
+    );
+    expect(bundle.projects).toHaveLength(1);
+
+    const imported = await apiCall<{ results: Array<{ success: boolean }> }>(
+      api,
+      'POST',
+      '/api/v1/projects/import-config',
+      bundle,
+    );
+    expect(imported.status).toBe(200);
+    expect(expectData(imported.result).results[0]?.success).toBe(false);
+  });
+
+  it('lista versões de Node detectadas', async () => {
+    const { api } = await boot();
+    const versions = expectData(
+      (
+        await apiCall<Array<{ executable: string; version: string }>>(
+          api,
+          'GET',
+          '/api/v1/system/node-versions',
+        )
+      ).result,
+    );
+    expect(versions.some((item) => item.executable === process.execPath)).toBe(true);
   });
 
   it('consulta ocupação de porta sem matar o ocupante', async () => {

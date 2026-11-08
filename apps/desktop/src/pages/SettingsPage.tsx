@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useConnectionStatus, useEngine } from '../providers/engine-provider';
+import type { ImportConfigResult } from '@lsm/contracts';
 import type { BackupInfo } from '../lib/api';
 import { formatBytes, formatDateTime } from '../lib/format';
 import { invokeTauri } from '../lib/tauri';
@@ -65,6 +66,10 @@ export function SettingsPage() {
   const [backupError, setBackupError] = useState<string | null>(null);
   const [backupNotice, setBackupNotice] = useState<string | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<BackupInfo | null>(null);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [configNotice, setConfigNotice] = useState<string | null>(null);
+  const [importResults, setImportResults] = useState<ImportConfigResult[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isTauri) {
@@ -143,6 +148,47 @@ export function SettingsPage() {
     },
     onError: (error) => setBackupError(error.message),
   });
+
+  const exportConfigs = useMutation({
+    mutationFn: () => client.exportProjects(),
+    onSuccess: (bundle) => {
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `local-server-manager-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setConfigNotice(`${bundle.projects.length} projeto(s) exportado(s).`);
+      setConfigError(null);
+      setImportResults([]);
+    },
+    onError: (error) => setConfigError(error.message),
+  });
+
+  const importConfigs = useMutation({
+    mutationFn: (bundle: unknown) => client.importProjects(bundle),
+    onSuccess: (result) => {
+      setImportResults(result.results);
+      const ok = result.results.filter((item) => item.success).length;
+      setConfigNotice(`${ok} de ${result.results.length} projeto(s) importado(s).`);
+      setConfigError(null);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.groups });
+    },
+    onError: (error) => setConfigError(error.message),
+  });
+
+  async function handleImportFile(file: File): Promise<void> {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      setImportResults([]);
+      importConfigs.mutate(parsed);
+    } catch {
+      setConfigError('Arquivo JSON inválido.');
+    }
+  }
 
   return (
     <div>
@@ -314,6 +360,60 @@ export function SettingsPage() {
             ))}
           </ul>
         )}
+      </Card>
+
+      <Card
+        className="mt-4"
+        title="Configurações de projetos"
+        description="Exporta/importa definições em JSON. Segredos de ambiente não são exportados."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="primary"
+              loading={exportConfigs.isPending}
+              onClick={() => exportConfigs.mutate()}
+            >
+              Exportar
+            </Button>
+            <Button
+              size="sm"
+              loading={importConfigs.isPending}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Importar
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  void handleImportFile(file);
+                }
+                event.target.value = '';
+              }}
+            />
+          </div>
+        }
+      >
+        {configError ? (
+          <ErrorBanner message={configError} onDismiss={() => setConfigError(null)} />
+        ) : null}
+        {configNotice ? <p className="text-xs text-emerald-300">{configNotice}</p> : null}
+        {importResults.some((item) => !item.success) ? (
+          <ul className="mt-2 space-y-1 text-xs text-amber-200">
+            {importResults
+              .filter((item) => !item.success)
+              .map((item) => (
+                <li key={item.name}>
+                  {item.name}: {item.errorCode} — {item.message}
+                </li>
+              ))}
+          </ul>
+        ) : null}
       </Card>
 
       <Card className="mt-4" title="Configuração do Engine">

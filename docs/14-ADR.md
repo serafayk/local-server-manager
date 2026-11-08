@@ -2,6 +2,23 @@
 
 Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicionadas no topo com data, contexto, decisão, alternativas e consequências.
 
+## ADR-018 — Grupos, exportação/importação e múltiplas versões de Node
+
+**Status:** Aceita (Fase 7)
+
+**Contexto:** Melhorias pós-MVP sem alterar a arquitetura do Engine.
+
+**Decisão:**
+
+1. **Grupos** são organização visual (`project_groups` + `projects.group_id`), com CRUD na API/UI e start/stop em lote por grupo. Não criam dependência; dependências reais ficam para uma fase futura.
+2. **Exportação** gera `{schemaVersion: 1, exportedAt, projects[]}` sem IDs internos e **sem valores de variáveis sensíveis**. As chaves omitidas são listadas em `maskedEnvironmentKeys`. Grupos são exportados por nome.
+3. **Importação** valida o bundle com Zod, recria grupos por nome (`ensureByName`), gera novos IDs e retorna resultado por projeto. Conflito de nome retorna `PROJECT_NAME_IN_USE` sem cancelar os demais. Limite de 500 projetos e corpo HTTP de 1 MB.
+4. **Múltiplas versões de Node**: detecção read-only de instalações NVM (`NVM_HOME`/`%APPDATA%\nvm`), Node do sistema e o Node do Engine; a UI preenche o caminho absoluto do `node.exe`. Nada executa `nvm use`.
+
+**Alternativas consideradas:** exportar segredos (rejeitado); IDs estáveis na importação (colidiriam entre máquinas); dependências entre projetos nesta fase (escopo maior).
+
+**Consequências:** configurações são portáveis e auditáveis. Renomear grupo não afeta projetos; excluir grupo apenas limpa `group_id`.
+
 ## ADR-017 — Autostart, backup/restauração e distribuição Windows
 
 **Status:** Aceita (Fase 6)

@@ -1,16 +1,22 @@
 import type {
   BulkProjectResult,
+  CreateGroupRequest,
   DetectProjectResponse,
   DomainEvent,
   EngineInfo,
   EngineSettings,
   ErrorCode,
+  ExportBundle,
+  ImportConfigResponse,
   LogRecord,
+  NodeInstallation,
   OperationResult,
   ProjectConfig,
+  ProjectGroup,
   ProjectInstance,
   ProjectSummary,
   RuntimeSnapshot,
+  UpdateGroupRequest,
 } from '@lsm/contracts';
 
 export interface EngineEndpoint {
@@ -208,6 +214,34 @@ export class EngineClient {
 
   requestRestore(file: string): Promise<RestoreRequestResult> {
     return this.request('POST', '/system/restore', { file });
+  }
+
+  listGroups(): Promise<ProjectGroup[]> {
+    return this.request('GET', '/groups');
+  }
+
+  createGroup(body: CreateGroupRequest): Promise<ProjectGroup> {
+    return this.request('POST', '/groups', body);
+  }
+
+  updateGroup(id: string, body: UpdateGroupRequest): Promise<ProjectGroup> {
+    return this.request('PUT', `/groups/${encodeURIComponent(id)}`, body);
+  }
+
+  deleteGroup(id: string): Promise<{ id: string; name: string }> {
+    return this.request('DELETE', `/groups/${encodeURIComponent(id)}`);
+  }
+
+  exportProjects(): Promise<ExportBundle> {
+    return this.request('GET', '/projects/export');
+  }
+
+  importProjects(bundle: unknown): Promise<ImportConfigResponse> {
+    return this.request('POST', '/projects/import-config', bundle);
+  }
+
+  getNodeVersions(): Promise<NodeInstallation[]> {
+    return this.request('GET', '/system/node-versions');
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {

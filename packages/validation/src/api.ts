@@ -18,6 +18,7 @@ export const importProjectRequestSchema = z.strictObject({
   port: z.number().int().min(1).max(65_535).nullable().optional(),
   startOnBoot: z.boolean().optional(),
   environment: z.record(z.string(), z.string().max(8_192)).optional(),
+  groupId: z.string().trim().min(1).max(64).nullable().optional(),
   enabled: z.boolean().optional(),
   startupOrder: z.number().int().min(0).max(10_000).optional(),
   restartPolicy: z.record(z.string(), z.unknown()).optional(),

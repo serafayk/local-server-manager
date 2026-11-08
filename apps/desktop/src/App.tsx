@@ -4,6 +4,7 @@ import { AppLayout } from './components/layout';
 import { EngineProvider } from './providers/engine-provider';
 import { DashboardPage } from './pages/DashboardPage';
 import { EventsPage } from './pages/EventsPage';
+import { GroupsPage } from './pages/GroupsPage';
 import { LogsPage } from './pages/LogsPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
@@ -30,6 +31,7 @@ export default function App() {
               <Route index element={<DashboardPage />} />
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="projects/:id" element={<ProjectDetailPage />} />
+              <Route path="groups" element={<GroupsPage />} />
               <Route path="logs" element={<LogsPage />} />
               <Route path="events" element={<EventsPage />} />
               <Route path="settings" element={<SettingsPage />} />

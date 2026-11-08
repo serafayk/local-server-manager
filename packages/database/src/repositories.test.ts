@@ -244,6 +244,37 @@ describe('SqliteEventRepository', () => {
   });
 });
 
+describe('SqliteGroupRepository', () => {
+  it('cria, atualiza, conta projetos e remove com SET NULL', () => {
+    const { repositories, close } = setup();
+    const group = {
+      id: newId(),
+      name: 'Backend',
+      sortOrder: 1,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    repositories.groups.create(group);
+
+    expect(repositories.groups.findByName('backend')?.id).toBe(group.id);
+    expect(repositories.groups.list()[0]?.name).toBe('Backend');
+
+    repositories.groups.update(group.id, { name: 'Serviços', sortOrder: 2 });
+    expect(repositories.groups.findById(group.id)).toMatchObject({
+      name: 'Serviços',
+      sortOrder: 2,
+    });
+
+    const project = makeProject({ groupId: group.id });
+    repositories.projects.create(project);
+    expect(repositories.groups.countProjects(group.id)).toBe(1);
+
+    repositories.groups.delete(group.id);
+    expect(repositories.groups.findById(group.id)).toBeNull();
+    expect(repositories.projects.findById(project.id)?.groupId).toBeNull();
+    close();
+  });
+});
+
 describe('SqliteSettingsRepository', () => {
   it('grava, lê e remove configurações', () => {
     const { repositories, close } = setup();

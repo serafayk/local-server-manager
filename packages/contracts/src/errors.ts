@@ -29,6 +29,8 @@ export const ERROR_CODES = [
   'UNSUPPORTED_PLATFORM',
   'LOG_WRITE_FAILED',
   'ROUTE_NOT_FOUND',
+  'GROUP_NAME_IN_USE',
+  'GROUP_NOT_FOUND',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -64,4 +66,6 @@ export const ERROR_HTTP_STATUS: Readonly<Record<ErrorCode, number>> = {
   UNSUPPORTED_PLATFORM: 501,
   LOG_WRITE_FAILED: 500,
   ROUTE_NOT_FOUND: 404,
+  GROUP_NAME_IN_USE: 409,
+  GROUP_NOT_FOUND: 404,
 };

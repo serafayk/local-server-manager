@@ -12,6 +12,7 @@ import type {
 import { ERROR_HTTP_STATUS, PROTOCOL_VERSION } from '@lsm/contracts';
 import type { Repositories } from '@lsm/database';
 import { inspectProjectDirectory, resolvePackageManagerInvocation } from '@lsm/platform-win';
+import { detectNodeInstallations } from '@lsm/platform-win';
 import { AppError, isAppError } from '@lsm/shared';
 import type { Clock, Logger } from '@lsm/shared';
 import {
@@ -27,6 +28,7 @@ import type { LogManager } from '../log-manager/log-manager';
 import type { MetricsCollector } from '../metrics/metrics-collector';
 import { checkPort } from '../ports/port-checker';
 import type { ProjectService } from '../supervisor/project-service';
+import type { GroupService } from '../supervisor/group-service';
 import type { Supervisor } from '../supervisor/supervisor';
 import { extractBearerToken, extractQueryToken, tokensMatch } from './auth';
 import {
@@ -45,6 +47,7 @@ export interface ApiServerOptions {
   token: string;
   supervisor: Supervisor;
   projects: ProjectService;
+  groups: GroupService;
   repositories: Repositories;
   logManager: LogManager;
   events: EventBus;
@@ -167,6 +170,7 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
         workingDirectory: body.directory,
         runtime,
         environment: body.environment ?? {},
+        groupId: body.groupId ?? null,
         port: body.port ?? null,
         portSource: body.port !== null && body.port !== undefined ? 'fixed' : 'none',
         startOnBoot: body.startOnBoot ?? false,
@@ -178,6 +182,42 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
         ...(body.shutdown !== undefined ? { shutdown: body.shutdown } : {}),
       });
       return sendSuccess(reply, created, requestIdOf(request), 201);
+    });
+
+    instance.get('/api/v1/projects/export', async (request, reply) => {
+      return sendSuccess(reply, options.projects.exportConfiguration(), requestIdOf(request));
+    });
+
+    instance.post('/api/v1/projects/import-config', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        options.projects.importConfiguration(request.body),
+        requestIdOf(request),
+      );
+    });
+
+    instance.get('/api/v1/groups', async (request, reply) => {
+      return sendSuccess(reply, options.groups.list(), requestIdOf(request));
+    });
+
+    instance.post('/api/v1/groups', async (request, reply) => {
+      return sendSuccess(reply, options.groups.create(request.body), requestIdOf(request), 201);
+    });
+
+    instance.put('/api/v1/groups/:id', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        options.groups.update(projectIdOf(request), request.body),
+        requestIdOf(request),
+      );
+    });
+
+    instance.delete('/api/v1/groups/:id', async (request, reply) => {
+      return sendSuccess(reply, options.groups.delete(projectIdOf(request)), requestIdOf(request));
+    });
+
+    instance.get('/api/v1/system/node-versions', async (request, reply) => {
+      return sendSuccess(reply, detectNodeInstallations(), requestIdOf(request));
     });
 
     instance.get('/api/v1/projects/:id', async (request, reply) => {

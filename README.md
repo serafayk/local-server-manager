@@ -38,9 +38,9 @@ Construir uma experiência semelhante ao Laragon, mas dedicada ao gerenciamento 
 
 ## Estado atual
 
-**Fases 0–6 concluídas** (2026-11-08). O Engine cadastra projetos, inicia/para/reinicia processos reais sem shell, supervisiona com auto-restart e backoff, reconcilia órfãos, grava logs JSONL com retenção, expõe API local autenticada (HTTP + WebSocket) e monitora saúde, portas e recursos. O desktop Tauri cobre dashboard, cadastro em etapas, detalhes, logs ao vivo, eventos, métricas, configurações, autostart e backup/restauração, com instalador NSIS por usuário.
+**Fases 0–6 concluídas e Fase 7 parcialmente concluída** (2026-11-08). O Engine gerencia projetos Node.js com supervisor próprio, recovery, reconciliação, logs, API local e monitoramento; o desktop Tauri tem instalador, autostart e backup/restauração. A Fase 7 já entrega grupos, exportação/importação de configurações e múltiplas versões de Node.
 
-Pendente: assinatura de código, updater automático e melhorias da Fase 7 (grupos, import/export, múltiplas versões de Node). Consulte [docs/15-DEVELOPMENT.md](docs/15-DEVELOPMENT.md), [docs/16-USER-GUIDE.md](docs/16-USER-GUIDE.md) e `CHANGELOG.md`.
+Backlog: dependências entre projetos, perfis, Named Pipe/Job Objects, assinatura de código e updater. Consulte [docs/15-DEVELOPMENT.md](docs/15-DEVELOPMENT.md), [docs/16-USER-GUIDE.md](docs/16-USER-GUIDE.md) e `CHANGELOG.md`.
 
 ## Stack proposta
 
