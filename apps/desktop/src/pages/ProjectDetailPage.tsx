@@ -433,10 +433,46 @@ export function ProjectDetailPage() {
                 <StatCard
                   label="RAM (working set)"
                   value={formatBytes(projectMetrics.memoryBytes)}
+                  hint="Árvore completa (raiz + filhos)"
+                />
+                <StatCard
+                  label="Memória privada"
+                  value={formatBytes(projectMetrics.privateBytes ?? null)}
+                  hint="PrivatePageCount"
+                />
+                <StatCard
+                  label="Processos"
+                  value={projectMetrics.processCount ?? 1}
+                  hint="pnpm + servidor"
                 />
                 <StatCard label="Uptime" value={formatDuration(projectMetrics.uptimeMs)} />
                 <StatCard label="PID" value={projectMetrics.pid} />
               </div>
+
+              {(projectMetrics.processes ?? []).length > 0 ? (
+                <Card title="Processos da árvore" bodyClassName="p-0">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wide text-zinc-500">
+                        <th className="px-3 py-2">PID</th>
+                        <th className="px-3 py-2">Processo</th>
+                        <th className="px-3 py-2 text-right">Memória</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/70">
+                      {(projectMetrics.processes ?? []).map((process) => (
+                        <tr key={process.pid}>
+                          <td className="mono px-3 py-1.5 text-zinc-400">{process.pid}</td>
+                          <td className="px-3 py-1.5 text-zinc-300">{process.name || '—'}</td>
+                          <td className="px-3 py-1.5 text-right text-zinc-300">
+                            {formatBytes(process.memoryBytes)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </Card>
+              ) : null}
               <p className="text-xs text-zinc-600">
                 Amostragem periódica do Engine; CPU normalizada pelo total de núcleos.
               </p>

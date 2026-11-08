@@ -133,6 +133,102 @@ function buildEnvironment(rows: EnvironmentRow[]): Record<string, string> {
   return environment;
 }
 
+export type MemoryProfile = 'off' | 'low' | 'medium' | 'high' | 'custom';
+
+export interface MemoryProfilePreset {
+  value: MemoryProfile;
+  label: string;
+  heapMb?: number;
+  semiSpaceMb?: number;
+}
+
+/** Presets aplicados via NODE_OPTIONS (herdado por pnpm → tsx/next → node). */
+export const MEMORY_PROFILES: readonly MemoryProfilePreset[] = [
+  { value: 'off', label: 'Desligado (padrão)' },
+  { value: 'low', label: 'Baixo — heap 256 MB · semi-espaço 8 MB', heapMb: 256, semiSpaceMb: 8 },
+  {
+    value: 'medium',
+    label: 'Médio — heap 512 MB · semi-espaço 16 MB',
+    heapMb: 512,
+    semiSpaceMb: 16,
+  },
+  {
+    value: 'high',
+    label: 'Alto — heap 1024 MB · semi-espaço 32 MB',
+    heapMb: 1024,
+    semiSpaceMb: 32,
+  },
+  { value: 'custom', label: 'Personalizado' },
+];
+
+export function buildNodeOptions(heapMb: number | null, semiSpaceMb: number | null): string {
+  const parts: string[] = [];
+  if (heapMb !== null && Number.isFinite(heapMb) && heapMb > 0) {
+    parts.push(`--max-old-space-size=${Math.round(heapMb)}`);
+  }
+  if (semiSpaceMb !== null && Number.isFinite(semiSpaceMb) && semiSpaceMb > 0) {
+    parts.push(`--max-semi-space-size=${Math.round(semiSpaceMb)}`);
+  }
+  return parts.join(' ');
+}
+
+export interface MemoryProfileState {
+  profile: MemoryProfile;
+  heapMb: number | null;
+  semiSpaceMb: number | null;
+}
+
+function findNodeOptionsRow(state: ProjectFormState): EnvironmentRow | undefined {
+  return state.environment.find((row) => row.key.trim().toUpperCase() === 'NODE_OPTIONS');
+}
+
+/** Deriva o preset a partir do NODE_OPTIONS atual (não sobrescreve valores manuais). */
+export function memoryProfileFromState(state: ProjectFormState): MemoryProfileState {
+  const row = findNodeOptionsRow(state);
+  if (!row || row.value.trim() === '') {
+    return { profile: 'off', heapMb: null, semiSpaceMb: null };
+  }
+  const heap = /--max-old-space-size=(\d+)/.exec(row.value)?.[1];
+  const semi = /--max-semi-space-size=(\d+)/.exec(row.value)?.[1];
+  const heapMb = heap ? Number(heap) : null;
+  const semiSpaceMb = semi ? Number(semi) : null;
+  const preset = MEMORY_PROFILES.find(
+    (item) =>
+      item.value !== 'off' &&
+      item.value !== 'custom' &&
+      item.heapMb === heapMb &&
+      item.semiSpaceMb === semiSpaceMb,
+  );
+  return { profile: preset?.value ?? 'custom', heapMb, semiSpaceMb };
+}
+
+/** Reescreve apenas a linha NODE_OPTIONS, preservando as demais variáveis. */
+export function applyMemoryProfile(
+  state: ProjectFormState,
+  profile: MemoryProfile,
+  custom?: { heapMb: number | null; semiSpaceMb: number | null },
+): ProjectFormState {
+  const environment = state.environment.filter(
+    (row) => row.key.trim().toUpperCase() !== 'NODE_OPTIONS',
+  );
+
+  if (profile === 'off') {
+    return { ...state, environment };
+  }
+
+  const preset = MEMORY_PROFILES.find((item) => item.value === profile);
+  const heapMb = profile === 'custom' ? (custom?.heapMb ?? 256) : (preset?.heapMb ?? 256);
+  const semiSpaceMb =
+    profile === 'custom' ? (custom?.semiSpaceMb ?? 8) : (preset?.semiSpaceMb ?? 8);
+  const value = buildNodeOptions(heapMb, semiSpaceMb);
+
+  if (value === '') {
+    return { ...state, environment };
+  }
+
+  return { ...state, environment: [...environment, { key: 'NODE_OPTIONS', value }] };
+}
+
 function buildSharedBody(state: ProjectFormState): Record<string, unknown> {
   const port = state.port.trim() === '' ? null : parseInteger(state.port, Number.NaN);
   return {

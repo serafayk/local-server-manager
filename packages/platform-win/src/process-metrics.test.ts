@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseProcessMetricsJson } from './process-metrics';
+import { aggregateProcessTrees, parseProcessMetricsJson } from './process-metrics';
 
 describe('parseProcessMetricsJson', () => {
   it('parseia objeto único', () => {
@@ -35,5 +35,106 @@ describe('parseProcessMetricsJson', () => {
     expect(parseProcessMetricsJson('[{"CPU":1},{"Id":0},{"Id":3}]')).toEqual([
       { pid: 3, cpuSeconds: null, memoryBytes: null },
     ]);
+  });
+});
+
+describe('aggregateProcessTrees', () => {
+  const rows = [
+    {
+      ProcessId: 100,
+      ParentProcessId: 1,
+      Name: 'node.exe',
+      WorkingSetSize: 10_000,
+      PrivatePageCount: 8_000,
+      KernelModeTime: '1000000',
+      UserModeTime: '1000000',
+    },
+    {
+      ProcessId: 200,
+      ParentProcessId: 100,
+      Name: 'node.exe',
+      WorkingSetSize: 40_000,
+      PrivatePageCount: 30_000,
+      KernelModeTime: 2_000_000,
+      UserModeTime: 3_000_000,
+    },
+    {
+      ProcessId: 300,
+      ParentProcessId: 200,
+      Name: 'node.exe',
+      WorkingSetSize: 5_000,
+      PrivatePageCount: 4_000,
+      KernelModeTime: 0,
+      UserModeTime: 0,
+    },
+    {
+      ProcessId: 400,
+      ParentProcessId: 1,
+      Name: 'outro.exe',
+      WorkingSetSize: 99_000,
+      PrivatePageCount: 99_000,
+      KernelModeTime: 0,
+      UserModeTime: 0,
+    },
+    {
+      ProcessId: 500,
+      ParentProcessId: 100,
+      Name: 'conhost.exe',
+      WorkingSetSize: 7_000_000,
+      PrivatePageCount: 7_000_000,
+      KernelModeTime: 0,
+      UserModeTime: 0,
+    },
+  ];
+
+  it('soma a árvore inteira e ignora processos fora dela', () => {
+    const result = aggregateProcessTrees(rows, [100]);
+    const sample = result.get(100);
+
+    expect(sample).toMatchObject({
+      pid: 100,
+      memoryBytes: 55_000,
+      privateBytes: 42_000,
+      processCount: 3,
+    });
+    // 0,2s + 0,5s = 0,7s de CPU acumulada na árvore.
+    expect(sample?.cpuSeconds).toBeCloseTo(0.7, 5);
+    expect(sample?.processes?.map((process) => process.pid)).toEqual([200, 100, 300]);
+  });
+
+  it('aceita estrutura aninhada repetida sem contar duas vezes', () => {
+    // 300 aparece como filho de 200 e de 100 (dado inconsistente do SO).
+    const duplicated = [
+      ...rows,
+      {
+        ProcessId: 300,
+        ParentProcessId: 100,
+        Name: 'node.exe',
+        WorkingSetSize: 5_000,
+        PrivatePageCount: 4_000,
+        KernelModeTime: 0,
+        UserModeTime: 0,
+      },
+    ];
+    const sample = aggregateProcessTrees(duplicated, [100]).get(100);
+    expect(sample?.processCount).toBe(3);
+    expect(sample?.memoryBytes).toBe(55_000);
+  });
+
+  it('retorna null quando o PID raiz não existe mais', () => {
+    const sample = aggregateProcessTrees(rows, [999]).get(999);
+    expect(sample).toMatchObject({
+      pid: 999,
+      memoryBytes: null,
+      privateBytes: null,
+      processCount: 0,
+    });
+    expect(sample?.processes).toEqual([]);
+  });
+
+  it('lida com JSON inválido e lista vazia', () => {
+    expect(aggregateProcessTrees('não é json', [100]).size).toBe(0);
+    expect(aggregateProcessTrees('', [100]).size).toBe(0);
+    expect(aggregateProcessTrees([], [100]).get(100)?.processCount).toBe(0);
   });
 });

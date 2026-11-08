@@ -2,7 +2,8 @@ import type { ProjectSummary } from '@lsm/contracts';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, Pencil, Play, RotateCw, Square, Trash2 } from 'lucide-react';
-import { formatUptime } from '../lib/format';
+import { formatBytes, formatUptime } from '../lib/format';
+import { useAppStore } from '../stores/app-store';
 import { HealthBadge, isActiveStatus, StatusBadge, StatusDot } from './status';
 import { Spinner } from './ui';
 
@@ -66,6 +67,7 @@ export function ProjectTable({
   onDelete,
 }: ProjectTableProps) {
   const selectable = Boolean(selected && onToggle);
+  const metricsByProject = useAppStore((state) => state.metricsByProject);
   const allSelected =
     selectable &&
     projects.length > 0 &&
@@ -92,6 +94,7 @@ export function ProjectTable({
             <th className="py-2 pr-3">PID</th>
             <th className="py-2 pr-3">Uptime</th>
             <th className="py-2 pr-3">Porta</th>
+            <th className="py-2 pr-3">Memória</th>
             <th className="py-2 pr-1 text-right">Ações</th>
           </tr>
         </thead>
@@ -100,6 +103,7 @@ export function ProjectTable({
             const runtime = project.runtime;
             const active = isActiveStatus(runtime.status);
             const busy = busyId === project.config.id;
+            const metrics = metricsByProject[project.config.id];
 
             return (
               <tr key={project.config.id} className="align-middle hover:bg-zinc-900/40">
@@ -149,6 +153,23 @@ export function ProjectTable({
                           aria-label="Porta em uso"
                         />
                       </span>
+                    ) : null}
+                  </span>
+                </td>
+                <td className="py-2 pr-3 text-xs text-zinc-400">
+                  <span
+                    className="inline-flex items-baseline gap-1"
+                    title={
+                      metrics?.processCount && metrics.processCount > 0
+                        ? `${metrics.processCount} processo(s) na árvore`
+                        : 'Sem amostra de memória'
+                    }
+                  >
+                    <span className="text-zinc-300">
+                      {formatBytes(metrics?.memoryBytes ?? null)}
+                    </span>
+                    {metrics?.processCount && metrics.processCount > 1 ? (
+                      <span className="text-[10px] text-zinc-500">({metrics.processCount}p)</span>
                     ) : null}
                   </span>
                 </td>

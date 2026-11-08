@@ -38,7 +38,20 @@ describe('MetricsCollector', () => {
         targets: [{ projectId: 'p1', pid: 100, startedAt: '2026-01-01T00:00:00.000Z' }],
         stats: { managed: 1, running: 1, crashed: 0 },
       }),
-      readMetrics: async () => new Map([[100, { pid: 100, cpuSeconds, memoryBytes: 2_048 }]]),
+      readMetrics: async () =>
+        new Map([
+          [
+            100,
+            {
+              pid: 100,
+              cpuSeconds,
+              memoryBytes: 2_048,
+              privateBytes: 1_536,
+              processCount: 3,
+              processes: [{ pid: 101, name: 'node.exe', memoryBytes: 1_024 }],
+            },
+          ],
+        ]),
     });
 
     const first = await collector.collectNow();
@@ -47,7 +60,12 @@ describe('MetricsCollector', () => {
       pid: 100,
       cpuPercent: null,
       memoryBytes: 2_048,
+      privateBytes: 1_536,
+      processCount: 3,
     });
+    expect(first.projects[0]?.processes).toEqual([
+      { pid: 101, name: 'node.exe', memoryBytes: 1_024 },
+    ]);
     expect(first.system).toMatchObject({
       managedProcesses: 1,
       running: 1,

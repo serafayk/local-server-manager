@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FolderOpen, FolderSearch, ShieldAlert } from 'lucide-react';
 import { ApiError } from '../lib/api';
 import { useGroupsQuery } from '../lib/hooks';
+import { buildNodeOptions, MEMORY_PROFILES, type MemoryProfile } from '../lib/payload';
 import { queryKeys } from '../lib/queries';
 import { pickFolder, isTauriRuntime } from '../lib/tauri';
 import { useEngine } from '../providers/engine-provider';
@@ -81,6 +82,7 @@ export function RootImportDialog({ open, onClose }: { open: boolean; onClose: ()
   const [rows, setRows] = useState<Row[]>([]);
   const [groupName, setGroupName] = useState('');
   const [createGroup, setCreateGroup] = useState(true);
+  const [memoryProfile, setMemoryProfile] = useState<MemoryProfile>('off');
   const [scanError, setScanError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [results, setResults] = useState<
@@ -94,6 +96,7 @@ export function RootImportDialog({ open, onClose }: { open: boolean; onClose: ()
       setRows([]);
       setGroupName('');
       setCreateGroup(true);
+      setMemoryProfile('off');
       setScanError(null);
       setSubmitError(null);
       setResults([]);
@@ -146,6 +149,10 @@ export function RootImportDialog({ open, onClose }: { open: boolean; onClose: ()
       }
 
       const created: Array<{ name: string; success: boolean; message?: string }> = [];
+      const preset = MEMORY_PROFILES.find((item) => item.value === memoryProfile);
+      const nodeOptions = buildNodeOptions(preset?.heapMb ?? null, preset?.semiSpaceMb ?? null);
+      const environment = nodeOptions === '' ? {} : { NODE_OPTIONS: nodeOptions };
+
       for (const row of selected) {
         try {
           await client.importProject({
@@ -158,6 +165,7 @@ export function RootImportDialog({ open, onClose }: { open: boolean; onClose: ()
             startupOrder: row.startupOrder,
             startOnBoot: false,
             enabled: true,
+            environment,
             healthCheck: healthCheckBody(row),
           });
           created.push({ name: row.name, success: true });
@@ -303,6 +311,24 @@ export function RootImportDialog({ open, onClose }: { open: boolean; onClose: ()
                   disabled={!createGroup}
                   placeholder="UAIZAPI"
                 />
+              </Field>
+              <Field
+                label="Perfil de memória"
+                htmlFor="scan-memory"
+                hint="Aplicado a todos os projetos criados"
+                className="min-w-[240px]"
+              >
+                <Select
+                  id="scan-memory"
+                  value={memoryProfile}
+                  onChange={(event) => setMemoryProfile(event.target.value as MemoryProfile)}
+                >
+                  {MEMORY_PROFILES.filter((preset) => preset.value !== 'custom').map((preset) => (
+                    <option key={preset.value} value={preset.value}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </Select>
               </Field>
             </div>
 

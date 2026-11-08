@@ -47,6 +47,9 @@ Apps Expo/React Native vêm desmarcados. Portas repetidas bloqueiam a criação.
   processo estar vivo (`Executando · Não saudável` é possível).
 - **Porta em uso**: aviso ao lado da porta quando outro processo já ocupa a porta
   configurada. O app não mata esse processo.
+- **Memória**: working set da árvore inteira (raiz + filhos). O sufixo `(Np)`
+  indica quantos processos compõem o projeto, por exemplo `pnpm` + servidor.
+  O detalhe (aba Métricas) mostra memória privada e os maiores processos.
 
 ## 4. Logs e eventos
 
@@ -72,6 +75,27 @@ o detalhe mostra **Última falha** com a causa. Corrija e clique em **Iniciar**.
 - Com o projeto em execução, o app oferece **Parar e editar**.
 - **Duplicar** cria outro projeto com a mesma configuração, sem copiar porta nem
   boot (evita conflito imediato).
+
+### Perfil de memória
+
+Em **Execução → Perfil de memória** você aplica `NODE_OPTIONS` ao projeto
+(herdado por pnpm → tsx/next → node):
+
+| Perfil        | Efeito                                               |
+| ------------- | ---------------------------------------------------- |
+| Desligado     | não define nada                                      |
+| Baixo         | `--max-old-space-size=256 --max-semi-space-size=8`   |
+| Médio         | `--max-old-space-size=512 --max-semi-space-size=16`  |
+| Alto          | `--max-old-space-size=1024 --max-semi-space-size=32` |
+| Personalizado | você informa heap e semi-espaço                      |
+
+Isso limita o **crescimento** do heap e o espaço da geração jovem; não reduz o
+consumo base. A maior economia continua sendo rodar build de produção em vez de
+`tsx watch`/`next dev`. Em **Adicionar pela raiz** há o mesmo seletor, aplicado a
+todos os projetos criados.
+
+> `--optimize-for-size` não é aceito em `NODE_OPTIONS`; só como flag direta do
+> `node` (projetos com `node dist/...`).
 
 ## 7. Inicialização com o Windows
 

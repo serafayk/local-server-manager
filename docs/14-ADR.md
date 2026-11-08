@@ -2,6 +2,22 @@
 
 Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicionadas no topo com data, contexto, decisão, alternativas e consequências.
 
+## ADR-020 — Métricas por árvore de processos e perfis de memória
+
+**Status:** Aceita (Fase 9)
+
+**Contexto:** as métricas liam apenas o PID raiz. Nos projetos iniciados por `pnpm --filter … start`, o raiz é o próprio pnpm; o servidor real (tsx/node/next) é filho, então memória e CPU apareciam subestimados.
+
+**Decisão:**
+
+1. **Agregação da árvore**: uma única consulta `Get-CimInstance Win32_Process` (ProcessId, ParentProcessId, WorkingSetSize, PrivatePageCount, KernelModeTime, UserModeTime) é transformada em árvore em memória e somada por projeto. `conhost/werfault/openconsole/runtimebroker` são ignorados.
+2. **Contrato**: `ProjectMetricsPayload` ganha `privateBytes`, `processCount` e `processes[]` (top 5), todos opcionais para compatibilidade.
+3. **UI**: coluna **Memória** na lista, detalhe por processo em Métricas, e o total do sistema passa a refletir a árvore.
+4. **Perfis de memória**: presets (Baixo/Médio/Alto/Personalizado) gravam `NODE_OPTIONS` no ambiente do projeto. Flags validadas no Node 24: `--max-old-space-size` e `--max-semi-space-size` são aceitos em `NODE_OPTIONS`; `--optimize-for-size` não é.
+5. **Limpeza**: `readProcessMetrics` (PID único) permanece para compatibilidade; o coletor usa `readProcessTreeMetrics` por padrão.
+
+**Limitações:** o perfil limita crescimento do heap e semi-espaço, não o consumo base; `tsx watch`/`next dev` continuam sendo os maiores ofensores. Job Objects e trim de working set ficam fora desta fase.
+
 ## ADR-019 — Configuração assistida e fim do ciclo de reinício
 
 **Status:** Aceita (Fase 8)

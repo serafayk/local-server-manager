@@ -10,6 +10,18 @@ export interface ProjectMetricsPayload {
   cpuPercent: number | null;
   memoryBytes: number | null;
   uptimeMs: number;
+  /** Memória privada somada da árvore de processos (quando disponível). */
+  privateBytes?: number | null;
+  /** Quantidade de processos da árvore, incluindo a raiz. */
+  processCount?: number;
+  /** Maiores processos da árvore, para detalhamento. */
+  processes?: ProjectProcessMetric[];
+}
+
+export interface ProjectProcessMetric {
+  pid: number;
+  name: string;
+  memoryBytes: number | null;
 }
 
 export interface SystemMetricsPayload {

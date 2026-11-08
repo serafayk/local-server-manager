@@ -1,7 +1,7 @@
 import { cpus } from 'node:os';
 import type { ProjectMetricsPayload, SystemMetricsPayload } from '@lsm/contracts';
 import type { Clock, Logger } from '@lsm/shared';
-import { readProcessMetrics, type ProcessMetricsSample } from '@lsm/platform-win';
+import { readProcessTreeMetrics, type ProcessMetricsSample } from '@lsm/platform-win';
 import type { EventBus } from '../core/event-bus';
 
 export interface MetricsTarget {
@@ -68,7 +68,7 @@ export class MetricsCollector {
 
   constructor(options: MetricsCollectorOptions) {
     this.options = options;
-    this.readMetrics = options.readMetrics ?? readProcessMetrics;
+    this.readMetrics = options.readMetrics ?? readProcessTreeMetrics;
     this.cpuCount = options.cpuCount ?? cpus().length ?? 1;
     this.intervalMs = options.intervalMs;
   }
@@ -138,6 +138,9 @@ export class MetricsCollector {
           pid: target.pid,
           cpuPercent,
           memoryBytes: sample?.memoryBytes ?? null,
+          privateBytes: sample?.privateBytes ?? null,
+          processCount: sample?.processCount ?? (sample ? 1 : 0),
+          processes: sample?.processes ?? [],
           uptimeMs: target.startedAt ? Math.max(0, nowMs - Date.parse(target.startedAt)) : 0,
         };
       });

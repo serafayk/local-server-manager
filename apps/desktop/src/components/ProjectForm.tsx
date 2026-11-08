@@ -4,15 +4,19 @@ import { useState, useEffect } from 'react';
 import { ApiError } from '../lib/api';
 import { formatCommand } from '../lib/format';
 import {
+  applyMemoryProfile,
   buildCreateBody,
   buildImportBody,
   buildUpdateBody,
   emptyFormState,
   formStateFromConfig,
+  MEMORY_PROFILES,
+  memoryProfileFromState,
   parseArgsText,
   validateFormState,
   validateStep,
   type EnvironmentRow,
+  type MemoryProfile,
   type ProjectFormState,
 } from '../lib/payload';
 import { queryKeys } from '../lib/queries';
@@ -166,6 +170,10 @@ export function ProjectForm({
   const currentNodePath = detectedNodes.some((node) => node.executable === state.executable)
     ? state.executable
     : '';
+
+  const memory = memoryProfileFromState(state);
+  const nodeOptionsValue =
+    state.environment.find((row) => row.key.trim().toUpperCase() === 'NODE_OPTIONS')?.value ?? '';
 
   return (
     <Dialog
@@ -612,6 +620,81 @@ export function ProjectForm({
               checked={state.restartEnabled}
               onChange={(checked) => update('restartEnabled', checked)}
             />
+          </div>
+
+          <div className="rounded-lg border border-zinc-800 p-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <Field
+                label="Perfil de memória"
+                htmlFor="project-memory-profile"
+                hint="Define NODE_OPTIONS para o projeto e para os processos filhos."
+                className="min-w-[280px] flex-1"
+              >
+                <Select
+                  id="project-memory-profile"
+                  value={memory.profile}
+                  onChange={(event) => {
+                    const profile = event.target.value as MemoryProfile;
+                    setState((previous) =>
+                      applyMemoryProfile(previous, profile, {
+                        heapMb: memory.heapMb ?? 256,
+                        semiSpaceMb: memory.semiSpaceMb ?? 8,
+                      }),
+                    );
+                  }}
+                >
+                  {MEMORY_PROFILES.map((preset) => (
+                    <option key={preset.value} value={preset.value}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              {memory.profile === 'custom' ? (
+                <>
+                  <Field label="Heap (MB)" htmlFor="project-memory-heap" className="w-32">
+                    <Input
+                      id="project-memory-heap"
+                      value={memory.heapMb ?? 256}
+                      inputMode="numeric"
+                      onChange={(event) =>
+                        setState((previous) =>
+                          applyMemoryProfile(previous, 'custom', {
+                            heapMb: Number.parseInt(event.target.value, 10) || null,
+                            semiSpaceMb: memory.semiSpaceMb ?? 8,
+                          }),
+                        )
+                      }
+                    />
+                  </Field>
+                  <Field label="Semi-espaço (MB)" htmlFor="project-memory-semi" className="w-36">
+                    <Input
+                      id="project-memory-semi"
+                      value={memory.semiSpaceMb ?? 8}
+                      inputMode="numeric"
+                      onChange={(event) =>
+                        setState((previous) =>
+                          applyMemoryProfile(previous, 'custom', {
+                            heapMb: memory.heapMb ?? 256,
+                            semiSpaceMb: Number.parseInt(event.target.value, 10) || null,
+                          }),
+                        )
+                      }
+                    />
+                  </Field>
+                </>
+              ) : null}
+            </div>
+            <p className="mt-2 text-[11px] text-zinc-500">
+              NODE_OPTIONS:{' '}
+              <span className="mono text-zinc-300">
+                {nodeOptionsValue === '' ? '—' : nodeOptionsValue}
+              </span>
+            </p>
+            <p className="mt-1 text-[11px] text-zinc-600">
+              Limita o heap e o semi-espaço da geração jovem; não reduz o consumo base. Vale a
+              partir do próximo start.
+            </p>
           </div>
 
           <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2">

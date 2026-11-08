@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyMemoryProfile,
   buildCreateBody,
   buildImportBody,
   emptyFormState,
   formStateFromConfig,
+  memoryProfileFromState,
   parseArgsText,
   validateAdvanced,
   validateCommand,
@@ -71,6 +73,56 @@ describe('buildCreateBody', () => {
       groupId: string | null;
     };
     expect(body.groupId).toBe('grupo-1');
+  });
+});
+
+describe('perfis de memória (NODE_OPTIONS)', () => {
+  it('aplica um preset e detecta de volta', () => {
+    const state = applyMemoryProfile(validState(), 'low');
+    expect(state.environment).toContainEqual({
+      key: 'NODE_OPTIONS',
+      value: '--max-old-space-size=256 --max-semi-space-size=8',
+    });
+
+    const detected = memoryProfileFromState(state);
+    expect(detected.profile).toBe('low');
+    expect(detected.heapMb).toBe(256);
+    expect(detected.semiSpaceMb).toBe(8);
+  });
+
+  it('preserva variáveis existentes ao trocar o perfil', () => {
+    const withEnv = { ...validState(), environment: [{ key: 'NODE_ENV', value: 'production' }] };
+    const state = applyMemoryProfile(withEnv, 'medium');
+    expect(state.environment).toHaveLength(2);
+    expect(state.environment).toContainEqual({ key: 'NODE_ENV', value: 'production' });
+  });
+
+  it('desliga removendo apenas NODE_OPTIONS', () => {
+    const withEnv = {
+      ...validState(),
+      environment: [
+        { key: 'NODE_OPTIONS', value: '--max-old-space-size=512' },
+        { key: 'NODE_ENV', value: 'production' },
+      ],
+    };
+    const state = applyMemoryProfile(withEnv, 'off');
+    expect(state.environment).toEqual([{ key: 'NODE_ENV', value: 'production' }]);
+  });
+
+  it('trata valor manual como personalizado', () => {
+    const manual = {
+      ...validState(),
+      environment: [{ key: 'NODE_OPTIONS', value: '--max-old-space-size=300' }],
+    };
+    const detected = memoryProfileFromState(manual);
+    expect(detected.profile).toBe('custom');
+    expect(detected.heapMb).toBe(300);
+
+    const applied = applyMemoryProfile(manual, 'custom', { heapMb: 400, semiSpaceMb: 4 });
+    expect(applied.environment).toContainEqual({
+      key: 'NODE_OPTIONS',
+      value: '--max-old-space-size=400 --max-semi-space-size=4',
+    });
   });
 });
 

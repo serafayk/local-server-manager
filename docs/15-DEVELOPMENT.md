@@ -1,4 +1,4 @@
-# 15 — Desenvolvimento, execução e limitações (Fases 1–4)
+﻿# 15 — Desenvolvimento, execução e limitações (Fases 1–4)
 
 > Documento operacional. A especificação continua em `01`–`14`.
 
@@ -271,7 +271,18 @@ pnpm --filter @lsm/desktop tauri:build
   `lastFailureHint` no snapshot (evento `project.recovery.aborted`). O log do crash é
   preservado; corrija a causa e inicie manualmente.
 
-## 12. Limitações conhecidas (Fase 7+)
+## 12. Métricas por árvore e perfis de memória (Fase 9)
+
+- `readProcessTreeMetrics` lê `Win32_Process` uma vez e soma working set,
+  memória privada e CPU da raiz + descendentes (pnpm → tsx/node/next).
+- `ProjectMetricsPayload` expõe `privateBytes`, `processCount` e `processes[]`.
+- UI: coluna **Memória** na lista, cartões de privada/processos e tabela por
+  processo no detalhe.
+- `NODE_OPTIONS` por projeto via presets (Baixo/Médio/Alto/Personalizado).
+  `--max-old-space-size` e `--max-semi-space-size` são aceitos; `--optimize-for-size`
+  não é aceito em `NODE_OPTIONS`.
+
+## 13. Limitações conhecidas (Fase 7+)
 
 1. **Assinatura e updater automático** — o instalador NSIS é gerado, mas assinatura de código e atualização automática ficam para a Fase 7.
 2. **Sem single-instance do desktop** — abrir o app duas vezes abre duas janelas (o Engine continua único por diretório de dados).
@@ -283,7 +294,7 @@ pnpm --filter @lsm/desktop tauri:build
 8. **Stop no Windows é forçado** — janela cooperativa curta (ADR-011).
 9. **Retenção sem limite global de disco** — hoje é por projeto/dias.
 
-## 13. Dados e privacidade
+## 14. Dados e privacidade
 
 - Banco: `%LOCALAPPDATA%\LocalServerManager\data\manager.sqlite`
 - Logs de processo: `%LOCALAPPDATA%\LocalServerManager\logs\<projectId>\<instanceId>.log`

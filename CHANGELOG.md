@@ -2,6 +2,22 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.10.0] — 2026-11-08
+
+### Fase 9 — Memória por projeto e perfis
+
+- Métricas passam a somar a **árvore de processos** (`Win32_Process`): working set,
+  memória privada, CPU e contagem por projeto (pnpm → tsx/node/next). `conhost`,
+  `werfault`, `openconsole` e `runtimebroker` são ignorados.
+- `ProjectMetricsPayload` ganha `privateBytes`, `processCount` e `processes[]`.
+- UI: coluna **Memória** na lista (com nº de processos), cartões de memória privada
+  e processos, e tabela por processo no detalhe.
+- **Perfis de memória** (Baixo/Médio/Alto/Personalizado) aplicam `NODE_OPTIONS` no
+  projeto; seletor também no "Adicionar pela raiz".
+- 8 novos testes; total de 276.
+- Skill global do OpenCode `local-server-manager` (fora do repositório) para
+  orientar agentes a cadastrar/iniciar projetos Node pelo LSM.
+
 ## [0.9.0] — 2026-11-08
 
 ### Fase 8 — Configuração assistida e fim do loop de reinício
