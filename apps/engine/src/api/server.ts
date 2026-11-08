@@ -11,8 +11,12 @@ import type {
 } from '@lsm/contracts';
 import { ERROR_HTTP_STATUS, PROTOCOL_VERSION } from '@lsm/contracts';
 import type { Repositories } from '@lsm/database';
-import { inspectProjectDirectory, resolvePackageManagerInvocation } from '@lsm/platform-win';
-import { detectNodeInstallations } from '@lsm/platform-win';
+import {
+  detectNodeInstallations,
+  inspectProjectDirectory,
+  resolvePackageManagerInvocation,
+  scanProjectRoot,
+} from '@lsm/platform-win';
 import { AppError, isAppError } from '@lsm/shared';
 import type { Clock, Logger } from '@lsm/shared';
 import {
@@ -20,6 +24,7 @@ import {
   parseDetectProjectRequest,
   parseImportProjectRequest,
   parseRestoreBackupRequest,
+  parseScanRootRequest,
 } from '@lsm/validation';
 import type { EventBus } from '../core/event-bus';
 import { runWithConcurrency } from '../core/concurrency';
@@ -141,6 +146,11 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
         packageManagerConfirmed: inspection.packageManager.confirmed,
       };
       return sendSuccess(reply, response, requestIdOf(request));
+    });
+
+    instance.post('/api/v1/projects/scan-root', async (request, reply) => {
+      const body = parseScanRootRequest(request.body);
+      return sendSuccess(reply, scanProjectRoot(body.directory), requestIdOf(request));
     });
 
     instance.post('/api/v1/projects/import', async (request, reply) => {

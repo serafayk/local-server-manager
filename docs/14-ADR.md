@@ -2,6 +2,25 @@
 
 Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicionadas no topo com data, contexto, decisão, alternativas e consequências.
 
+## ADR-019 — Configuração assistida e fim do ciclo de reinício
+
+**Status:** Aceita (Fase 8)
+
+**Contexto:** cadastrar um monorepo exigia repetir manualmente diretório, script, porta e health para cada serviço. Em conflito de porta ou build ausente, o supervisor insistia em retries exponenciais, escondendo a causa.
+
+**Decisão:**
+
+1. **Varredura da raiz** (`POST /api/v1/projects/scan-root`) reconhece workspaces (`pnpm-workspace.yaml`, `workspaces`, `turbo.json`, `lerna.json`), lê portas de `.env` e de `*.config.ts` (`XXX_PORT` + `.default(...)`), extrai `-p/--port` do script e detecta `/health` no código. É read-only e devolve sugestões; nada é criado sem confirmação.
+2. **Revisão antes de criar**: a UI lista os candidatos com checkbox, nome, script, porta e health editáveis, sugere um grupo e indica a origem da porta. Apps Expo/React Native vêm desmarcados.
+3. **Edição visível**: ação Editar na linha da lista; com o projeto em execução, oferece "Parar e editar" em vez de um botão desabilitado sem explicação. Inclui **Duplicar** (sem copiar porta/boot).
+4. **Formulário curto**: etapa de execução mostra só o essencial; retry, timeouts e health ficam em "Configuração avançada".
+5. **Falha fatal aborta o retry**: `EADDRINUSE`, build ausente (`next start` sem `.next/BUILD_ID`), módulo ausente, `ECONNREFUSED` e `EACCES` encerram a política de recuperação, marcam **FAILED** e expõem `lastFailureHint` (evento `project.recovery.aborted`). O usuário corrige e inicia manualmente.
+6. **Seletor de pasta nativo** via comando Tauri `pick_folder` (FolderBrowserDialog/STA), sem plugin adicional; no navegador resta o campo de texto.
+
+**Alternativas consideradas:** plugin `tauri-plugin-dialog` (dependência extra), retry infinito com backoff maior (continua escondendo a causa), criar todos os apps automaticamente (gera projetos indesejados).
+
+**Consequências:** configuração inicial de um monorepo cai para uma revisão de tela; erros de ambiente deixam de gerar loops e passam a ser acionáveis.
+
 ## ADR-018 — Grupos, exportação/importação e múltiplas versões de Node
 
 **Status:** Aceita (Fase 7)

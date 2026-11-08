@@ -1,11 +1,13 @@
-import type { ProjectStatus, ProjectSummary } from '@lsm/contracts';
+import type { ProjectConfig, ProjectStatus, ProjectSummary } from '@lsm/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Search } from 'lucide-react';
+import { FolderSearch, Plus, Search } from 'lucide-react';
 import { useProjectActions } from '../lib/actions';
 import { useGroupsQuery, useProjectsQuery } from '../lib/hooks';
 import { ProjectForm } from '../components/ProjectForm';
 import { ProjectTable } from '../components/ProjectTable';
+import { RootImportDialog } from '../components/RootImportDialog';
+import { isActiveStatus } from '../components/status';
 import { PageHeader } from '../components/page';
 import { Button, Card, Dialog, EmptyState, ErrorBanner, Input, Select } from '../components/ui';
 
@@ -32,6 +34,9 @@ export function ProjectsPage() {
   const [groupFilter, setGroupFilter] = useState('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [formOpen, setFormOpen] = useState(searchParams.get('new') === '1');
+  const [rootImportOpen, setRootImportOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<ProjectConfig | null>(null);
+  const [stopForEdit, setStopForEdit] = useState<ProjectSummary | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
 
   useEffect(() => {
@@ -100,10 +105,16 @@ export function ProjectsPage() {
         title="Projetos"
         description="Cadastro, execução e controle em lote."
         actions={
-          <Button variant="primary" onClick={() => setFormOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Novo projeto
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => setRootImportOpen(true)}>
+              <FolderSearch className="h-4 w-4" />
+              Adicionar pela raiz
+            </Button>
+            <Button variant="primary" onClick={() => setFormOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Novo projeto
+            </Button>
+          </div>
         }
       />
 
@@ -218,6 +229,17 @@ export function ProjectsPage() {
             onStart={(id) => actions.start.mutate(id)}
             onStop={(id) => actions.stop.mutate(id)}
             onRestart={(id) => actions.restart.mutate(id)}
+            onEdit={(id) => {
+              const target = projects.find((project) => project.config.id === id) ?? null;
+              if (!target) {
+                return;
+              }
+              if (isActiveStatus(target.runtime.status)) {
+                setStopForEdit(target);
+              } else {
+                setEditTarget(target.config);
+              }
+            }}
             onDelete={(id) => {
               const target = projects.find((project) => project.config.id === id) ?? null;
               setDeleteTarget(target);
@@ -234,6 +256,48 @@ export function ProjectsPage() {
       </p>
 
       <ProjectForm open={formOpen} onClose={() => setFormOpen(false)} />
+      <ProjectForm
+        open={editTarget !== null}
+        onClose={() => setEditTarget(null)}
+        project={editTarget}
+      />
+      <RootImportDialog open={rootImportOpen} onClose={() => setRootImportOpen(false)} />
+
+      <Dialog
+        open={stopForEdit !== null}
+        onClose={() => setStopForEdit(null)}
+        title="Parar para editar"
+        description="A configuração só pode ser alterada com o projeto parado."
+        size="md"
+        footer={
+          <>
+            <Button onClick={() => setStopForEdit(null)}>Cancelar</Button>
+            <Button
+              variant="primary"
+              loading={actions.stop.isPending}
+              onClick={() => {
+                if (!stopForEdit) {
+                  return;
+                }
+                const config = stopForEdit.config;
+                actions.stop.mutate(config.id, {
+                  onSuccess: () => {
+                    setStopForEdit(null);
+                    setEditTarget(config);
+                  },
+                });
+              }}
+            >
+              Parar e editar
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-zinc-300">
+          <span className="font-semibold">{stopForEdit?.config.name}</span> está{' '}
+          {stopForEdit?.runtime.status.toLowerCase()}. Parar o processo para abrir a configuração?
+        </p>
+      </Dialog>
 
       <Dialog
         open={deleteTarget !== null}

@@ -1,7 +1,7 @@
 import type { ProjectSummary } from '@lsm/contracts';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Play, RotateCw, Square, Trash2 } from 'lucide-react';
+import { AlertTriangle, Pencil, Play, RotateCw, Square, Trash2 } from 'lucide-react';
 import { formatUptime } from '../lib/format';
 import { HealthBadge, isActiveStatus, StatusBadge, StatusDot } from './status';
 import { Spinner } from './ui';
@@ -15,6 +15,7 @@ export interface ProjectTableProps {
   onStart: (id: string) => void;
   onStop: (id: string) => void;
   onRestart: (id: string) => void;
+  onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
 }
 
@@ -61,6 +62,7 @@ export function ProjectTable({
   onStart,
   onStop,
   onRestart,
+  onEdit,
   onDelete,
 }: ProjectTableProps) {
   const selectable = Boolean(selected && onToggle);
@@ -180,6 +182,20 @@ export function ProjectTable({
                         >
                           <RotateCw className="h-4 w-4" />
                         </IconAction>
+                        {onEdit ? (
+                          <IconAction
+                            label="Editar"
+                            title={
+                              active
+                                ? 'vamos parar o projeto e abrir a configuração'
+                                : 'abrir configuração'
+                            }
+                            disabled={busy}
+                            onClick={() => onEdit(project.config.id)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </IconAction>
+                        ) : null}
                         {onDelete ? (
                           <IconAction
                             label="Remover"

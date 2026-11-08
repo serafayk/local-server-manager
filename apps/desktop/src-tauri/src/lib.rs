@@ -283,6 +283,44 @@ fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, String> {
     }
 }
 
+/// Abre o seletor de pasta nativo do Windows e devolve o caminho escolhido.
+/// Sem dependência de plugin: usa o FolderBrowserDialog via PowerShell (STA).
+#[tauri::command]
+fn pick_folder(title: Option<String>) -> Option<String> {
+    #[cfg(target_os = "windows")]
+    {
+        let description = title.unwrap_or_else(|| "Selecione a pasta do projeto".to_string());
+        let escaped = description.replace('\'', "''");
+        let script = format!(
+            "Add-Type -AssemblyName System.Windows.Forms; \
+             $dialog = New-Object System.Windows.Forms.FolderBrowserDialog; \
+             $dialog.Description = '{escaped}'; \
+             $dialog.ShowNewFolderButton = $true; \
+             if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {{ \
+               [Console]::Out.Write($dialog.SelectedPath) \
+             }}"
+        );
+        let output = Command::new("powershell.exe")
+            .args(["-NoProfile", "-STA", "-Command", &script])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let selected = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if selected.is_empty() {
+            None
+        } else {
+            Some(selected)
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = title;
+        None
+    }
+}
+
 /// Reinicia o Engine (usado após agendar uma restauração de backup).
 #[tauri::command]
 async fn restart_engine(app: AppHandle) -> Result<EngineApiInfo, String> {
@@ -362,7 +400,8 @@ pub fn run() {
             engine_info,
             autostart_status,
             set_autostart,
-            restart_engine
+            restart_engine,
+            pick_folder
         ])
         .run(tauri::generate_context!())
         .expect("erro ao executar o Local Server Manager");

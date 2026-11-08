@@ -2,7 +2,7 @@ import type { LogRecord } from '@lsm/contracts';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, Play, RotateCw, Square, Trash2 } from 'lucide-react';
+import { ArrowLeft, Copy, Pencil, Play, RotateCw, Square, Trash2 } from 'lucide-react';
 import { useProjectActions } from '../lib/actions';
 import {
   useProjectEvents,
@@ -67,6 +67,8 @@ export function ProjectDetailPage() {
 
   const [tab, setTab] = useState('overview');
   const [editOpen, setEditOpen] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [stopForEditOpen, setStopForEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [instanceId, setInstanceId] = useState<string | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -149,12 +151,25 @@ export function ProjectDetailPage() {
             </Button>
             <Button
               size="sm"
-              disabled={active}
-              title={active ? 'Pare antes de editar' : 'Editar'}
-              onClick={() => setEditOpen(true)}
+              title={active ? 'Parar e editar' : 'Editar'}
+              onClick={() => {
+                if (active) {
+                  setStopForEditOpen(true);
+                } else {
+                  setEditOpen(true);
+                }
+              }}
             >
               <Pencil className="h-3.5 w-3.5" />
               Editar
+            </Button>
+            <Button
+              size="sm"
+              title="Criar outro projeto com a mesma configuração"
+              onClick={() => setDuplicateOpen(true)}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Duplicar
             </Button>
             <Button
               size="sm"
@@ -170,6 +185,20 @@ export function ProjectDetailPage() {
       />
 
       {actionError ? <ErrorBanner message={actionError.message} /> : null}
+
+      {runtime.lastFailureHint ? (
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-800/70 bg-amber-950/40 px-3 py-2 text-xs text-amber-200">
+          <span className="mt-0.5 shrink-0">⚠</span>
+          <div>
+            <p className="font-medium">Última falha</p>
+            <p className="mt-0.5 text-amber-200/90">{runtime.lastFailureHint}</p>
+            <p className="mt-1 text-amber-200/70">
+              O reinício automático foi interrompido para evitar um ciclo. Corrija a causa e inicie
+              manualmente.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-4">
         <Tabs items={TABS} value={tab} onChange={setTab} />
@@ -335,7 +364,16 @@ export function ProjectDetailPage() {
               <Definition label="Shutdown" value={`${config.shutdown.gracefulTimeoutMs} ms`} />
             </dl>
             <div className="mt-3">
-              <Button size="sm" disabled={active} onClick={() => setEditOpen(true)}>
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (active) {
+                    setStopForEditOpen(true);
+                  } else {
+                    setEditOpen(true);
+                  }
+                }}
+              >
                 <Pencil className="h-3.5 w-3.5" />
                 Editar configuração
               </Button>
@@ -413,6 +451,38 @@ export function ProjectDetailPage() {
       ) : null}
 
       <ProjectForm open={editOpen} onClose={() => setEditOpen(false)} project={config} />
+      <ProjectForm open={duplicateOpen} onClose={() => setDuplicateOpen(false)} template={config} />
+
+      <Dialog
+        open={stopForEditOpen}
+        onClose={() => setStopForEditOpen(false)}
+        title="Parar para editar"
+        description="A configuração só pode ser alterada com o projeto parado."
+        size="md"
+        footer={
+          <>
+            <Button onClick={() => setStopForEditOpen(false)}>Cancelar</Button>
+            <Button
+              variant="primary"
+              loading={actions.stop.isPending}
+              onClick={() =>
+                actions.stop.mutate(config.id, {
+                  onSuccess: () => {
+                    setStopForEditOpen(false);
+                    setEditOpen(true);
+                  },
+                })
+              }
+            >
+              Parar e editar
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-zinc-300">
+          Parar <span className="font-semibold">{config.name}</span> para abrir a configuração?
+        </p>
+      </Dialog>
 
       <Dialog
         open={deleteOpen}

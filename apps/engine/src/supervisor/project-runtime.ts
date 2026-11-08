@@ -44,6 +44,54 @@ export interface ProjectRuntimeDeps {
   processManager: ProcessManager;
 }
 
+interface FailureDiagnosis {
+  hint: string;
+  /** Quando false, a política de retry não deve insistir (erro de configuração/ambiente). */
+  retryable: boolean;
+}
+
+const FAILURE_PATTERNS: ReadonlyArray<{ pattern: RegExp; hint: string; retryable: boolean }> = [
+  {
+    pattern: /EADDRINUSE|address already in use/i,
+    hint: 'Porta já está em uso. Encerre o processo que a ocupa ou altere a porta do projeto.',
+    retryable: false,
+  },
+  {
+    pattern: /production-start-no-build-id|Could not find a production build/i,
+    hint: 'Build de produção ausente: rode o build do projeto ou use o script "dev".',
+    retryable: false,
+  },
+  {
+    pattern: /Cannot find module|MODULE_NOT_FOUND/i,
+    hint: 'Dependência ausente: instale as dependências do projeto.',
+    retryable: false,
+  },
+  {
+    pattern: /ECONNREFUSED\s+127\.0\.0\.1:5432|ECONNREFUSED.*postgres|connect ECONNREFUSED/i,
+    hint: 'Serviço externo indisponível (ex.: PostgreSQL). Inicie-o antes do projeto.',
+    retryable: false,
+  },
+  {
+    pattern: /EACCES|EPERM/i,
+    hint: 'Permissão negada ao acessar arquivo ou porta.',
+    retryable: false,
+  },
+  {
+    pattern: /ENOENT/i,
+    hint: 'Arquivo ou diretório não encontrado. Confira o comando e o diretório do projeto.',
+    retryable: false,
+  },
+];
+
+function diagnoseFailure(text: string): FailureDiagnosis | null {
+  for (const entry of FAILURE_PATTERNS) {
+    if (entry.pattern.test(text)) {
+      return { hint: entry.hint, retryable: entry.retryable };
+    }
+  }
+  return null;
+}
+
 interface SpawnSpec {
   executable: string;
   args: string[];
@@ -74,6 +122,8 @@ export class ProjectRuntime {
   private readonly recovery: RecoveryManager;
   private readonly healthMonitor: HealthMonitor;
   private portInUseValue: boolean | null = null;
+  private lastFailureHintValue: string | null = null;
+  private outputBuffer = '';
   private disposed = false;
 
   constructor(private readonly deps: ProjectRuntimeDeps) {
@@ -120,6 +170,7 @@ export class ProjectRuntime {
       lastExit: this.lastExitValue,
       updatedAt: this.updatedAtValue,
       portInUse: this.portInUseValue,
+      lastFailureHint: this.lastFailureHintValue,
     };
   }
 
@@ -206,6 +257,8 @@ export class ProjectRuntime {
     this.exitWaiters = [];
     this.stopReason = null;
     this.portInUseValue = null;
+    this.lastFailureHintValue = null;
+    this.outputBuffer = '';
     this.desired = 'RUNNING';
 
     this.transition('STARTING');
@@ -251,12 +304,14 @@ export class ProjectRuntime {
       );
     }
 
-    managed.onStdout((chunk) =>
-      this.deps.logManager.push(this.projectId, instanceId, 'stdout', chunk),
-    );
-    managed.onStderr((chunk) =>
-      this.deps.logManager.push(this.projectId, instanceId, 'stderr', chunk),
-    );
+    managed.onStdout((chunk) => {
+      this.captureOutput(chunk);
+      this.deps.logManager.push(this.projectId, instanceId, 'stdout', chunk);
+    });
+    managed.onStderr((chunk) => {
+      this.captureOutput(chunk);
+      this.deps.logManager.push(this.projectId, instanceId, 'stderr', chunk);
+    });
     managed.onExit((info) => this.handleExit(instanceId, info));
     managed.onError((error) => this.handleExit(instanceId, { code: null, signal: null }, error));
 
@@ -383,6 +438,14 @@ export class ProjectRuntime {
         ? 'FAILED'
         : 'STOPPED';
 
+    // Diagnóstico precisa ser lido antes de limpar o estado da instância.
+    const portConflict = this.portInUseValue === true;
+    const diagnosis = isCrash ? this.diagnoseCrash(portConflict, spawnError) : null;
+    const abortRetry = isCrash && diagnosis !== null && !diagnosis.retryable;
+    if (diagnosis) {
+      this.lastFailureHintValue = diagnosis.hint;
+    }
+
     const exitInfo: ProcessExitInfo = { code: info.code, signal: info.signal, reason, at };
 
     this.pidValue = null;
@@ -452,8 +515,56 @@ export class ProjectRuntime {
     });
 
     if (isCrash) {
+      if (abortRetry && diagnosis) {
+        this.desired = 'STOPPED';
+        this.safeTransition('FAILED');
+        const message = `reinício automático cancelado: ${diagnosis.hint}`;
+        this.persistEvent('error', 'project.recovery.aborted', message, {
+          cause: diagnosis.hint,
+          portConflict,
+          exitCode: info.code,
+        });
+        this.deps.logManager.recordSystem(this.projectId, instanceId, message);
+        this.deps.events.emit(
+          'project.recovery.aborted',
+          { projectId: this.projectId, hint: diagnosis.hint, attempts: this.restartAttemptValue },
+          this.projectId,
+        );
+        return;
+      }
       this.handleRecoveryAfterFailure();
     }
+  }
+
+  /** Guarda a saída recente para diagnosticar a causa do crash. */
+  private captureOutput(chunk: string | Buffer): void {
+    if (this.outputBuffer.length >= 16_000) {
+      return;
+    }
+    this.outputBuffer += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+    if (this.outputBuffer.length > 32_000) {
+      this.outputBuffer = this.outputBuffer.slice(-16_000);
+    }
+  }
+
+  private diagnoseCrash(portConflict: boolean, spawnError?: Error): FailureDiagnosis | null {
+    if (portConflict) {
+      const port = this.configValue.port;
+      return {
+        hint:
+          port === null
+            ? 'Porta configurada já está em uso. Encerre o processo que a ocupa ou altere a porta.'
+            : `Porta ${port} já está em uso. Encerre o processo que a ocupa ou altere a porta do projeto.`,
+        retryable: false,
+      };
+    }
+    if (spawnError) {
+      const fromSpawn = diagnoseFailure(spawnError.message);
+      if (fromSpawn) {
+        return fromSpawn;
+      }
+    }
+    return diagnoseFailure(this.outputBuffer);
   }
 
   /**

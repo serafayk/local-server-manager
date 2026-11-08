@@ -2,6 +2,18 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.9.0] — 2026-11-08
+
+### Fase 8 — Configuração assistida e fim do loop de reinício
+
+- **Adicionar pela raiz**: `POST /api/v1/projects/scan-root` reconhece workspaces (pnpm/npm/yarn/turbo/lerna), portas (`.env`, `*.config.ts`, `-p/--port` no script), health (`/health`) e sugere grupo. Somente leitura.
+- Tela de revisão com checkbox, nome, script, porta e health editáveis; portas repetidas bloqueiam a criação; apps Expo/React Native vêm desmarcados.
+- **Seletor de pasta nativo** (`pick_folder`, FolderBrowserDialog) no cadastro e na varredura; campo de texto permanece como alternativa.
+- **Editar na lista de projetos**, com "Parar e editar" quando o processo está ativo; **Duplicar** reaproveitando o formulário (sem porta/boot).
+- Formulário: campos avançados (retry, timeouts, health) recolhidos; removido campo Grupo duplicado; dica sobre `start` vs `dev` e build prévio.
+- **Falhas fatais abortam o retry**: `EADDRINUSE`, build ausente, módulo ausente, `ECONNREFUSED` e `EACCES` → status **FALHOU**, `lastFailureHint` no snapshot e evento `project.recovery.aborted`, em vez de ciclo infinito.
+- 5 novos testes (scanner, rota e abort de retry); total de 268.
+
 ## [0.8.0] — 2026-11-08
 
 ### Fase 7 (parcial) — Melhorias

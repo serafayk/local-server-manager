@@ -51,6 +51,7 @@ export interface DomainEventPayloads {
   'project.restart.scheduled': { projectId: string; attempt: number; delayMs: number };
   'project.restart.started': { projectId: string; attempt: number };
   'project.recovery.exhausted': { projectId: string; attempts: number };
+  'project.recovery.aborted': { projectId: string; hint: string; attempts: number };
   'project.health.changed': {
     projectId: string;
     health: HealthStatus;
@@ -85,6 +86,7 @@ export const DOMAIN_EVENT_TYPES = [
   'project.restart.scheduled',
   'project.restart.started',
   'project.recovery.exhausted',
+  'project.recovery.aborted',
   'project.health.changed',
   'project.port.conflict',
   'project.log',

@@ -16,6 +16,7 @@ import type {
   ProjectInstance,
   ProjectSummary,
   RuntimeSnapshot,
+  ScanRootResponse,
   UpdateGroupRequest,
 } from '@lsm/contracts';
 
@@ -186,6 +187,10 @@ export class EngineClient {
 
   detect(directory: string): Promise<DetectProjectResponse> {
     return this.request('POST', '/projects/detect', { directory });
+  }
+
+  scanRoot(directory: string): Promise<ScanRootResponse> {
+    return this.request('POST', '/projects/scan-root', { directory });
   }
 
   getSettings(): Promise<EngineSettings> {

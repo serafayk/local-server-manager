@@ -52,6 +52,7 @@ gerado pelo Engine. Não retornar stack trace; o stack completo fica no log inte
 | GET    | `/api/v1/projects`               | Listar projetos (com runtime)              |
 | POST   | `/api/v1/projects`               | Criar projeto                              |
 | POST   | `/api/v1/projects/detect`        | Ler `package.json`/lockfile                |
+| POST   | `/api/v1/projects/scan-root`     | Varrer a raiz e propor projetos            |
 | POST   | `/api/v1/projects/import`        | Criar a partir de uma pasta                |
 | GET    | `/api/v1/projects/export`        | Exportar configurações (sem segredos)      |
 | POST   | `/api/v1/projects/import-config` | Importar bundle de configurações           |

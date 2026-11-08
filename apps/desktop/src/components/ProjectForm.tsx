@@ -17,6 +17,7 @@ import {
 } from '../lib/payload';
 import { queryKeys } from '../lib/queries';
 import { useGroupsQuery, useNodeVersionsQuery } from '../lib/hooks';
+import { isTauriRuntime, pickFolder } from '../lib/tauri';
 import { useEngine } from '../providers/engine-provider';
 import {
   Button,
@@ -32,6 +33,25 @@ import {
 
 const STEP_LABELS = ['Projeto', 'Comando', 'Execução'];
 
+function initialState(
+  project?: ProjectConfig | null,
+  template?: ProjectConfig | null,
+): ProjectFormState {
+  if (project) {
+    return formStateFromConfig(project);
+  }
+  if (template) {
+    return {
+      ...formStateFromConfig(template),
+      name: `${template.name} (cópia)`,
+      // Porta e boot não são copiados: evita conflito imediato.
+      port: '',
+      startOnBoot: false,
+    };
+  }
+  return emptyFormState();
+}
+
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     return error.message;
@@ -43,10 +63,13 @@ export function ProjectForm({
   open,
   onClose,
   project,
+  template,
 }: {
   open: boolean;
   onClose: () => void;
   project?: ProjectConfig | null;
+  /** Usado em "Duplicar": preenche o formulário a partir de outro projeto. */
+  template?: ProjectConfig | null;
 }) {
   const { client } = useEngine();
   const queryClient = useQueryClient();
@@ -55,23 +78,24 @@ export function ProjectForm({
   const nodeVersionsQuery = useNodeVersionsQuery();
   const detectedNodes = nodeVersionsQuery.data ?? [];
 
-  const [state, setState] = useState<ProjectFormState>(() =>
-    project ? formStateFromConfig(project) : emptyFormState(),
-  );
+  const [state, setState] = useState<ProjectFormState>(() => initialState(project, template));
   const [step, setStep] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [detection, setDetection] = useState<DetectProjectResponse | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setState(project ? formStateFromConfig(project) : emptyFormState());
+      setState(initialState(project, template));
       setStep(0);
       setErrors([]);
       setSubmitError(null);
       setDetection(null);
+      setAdvancedOpen(false);
     }
-  }, [open, project]);
+  }, [open, project, template]);
 
   function update<K extends keyof ProjectFormState>(key: K, value: ProjectFormState[K]): void {
     setState((previous) => ({ ...previous, [key]: value }));
@@ -147,11 +171,19 @@ export function ProjectForm({
     <Dialog
       open={open}
       onClose={onClose}
-      title={isEdit && project ? `Editar ${project.name}` : 'Novo projeto'}
+      title={
+        isEdit && project
+          ? `Editar ${project.name}`
+          : template
+            ? `Duplicar ${template.name}`
+            : 'Novo projeto'
+      }
       description={
         isEdit
           ? 'Projeto parado obrigatoriamente. Campos de comando usam executável + argumentos.'
-          : 'Cadastro em três etapas. Nada é executado durante a detecção.'
+          : template
+            ? 'Cópia da configuração. Porta e boot não são copiados; ajuste antes de criar.'
+            : 'Cadastro em três etapas. Nada é executado durante a detecção.'
       }
       size="xl"
       footer={
@@ -181,7 +213,7 @@ export function ProjectForm({
                 submit.mutate();
               }}
             >
-              {isEdit ? 'Salvar alterações' : 'Criar projeto'}
+              {isEdit ? 'Salvar alterações' : template ? 'Criar cópia' : 'Criar projeto'}
             </Button>
           )}
         </>
@@ -261,28 +293,9 @@ export function ProjectForm({
           </Field>
 
           <Field
-            label="Grupo"
-            htmlFor="project-group"
-            hint="Opcional; organização visual (não cria dependência)."
-          >
-            <Select
-              id="project-group"
-              value={state.groupId}
-              onChange={(event) => update('groupId', event.target.value)}
-            >
-              <option value="">Sem grupo</option>
-              {(groupsQuery.data ?? []).map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          <Field
             label="Diretório do projeto"
             htmlFor="project-directory"
-            hint="Caminho absoluto. A detecção lê apenas package.json e lockfiles."
+            hint="Caminho absoluto. Escolher a pasta já dispara a detecção."
           >
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
@@ -297,6 +310,27 @@ export function ProjectForm({
                   }
                 }}
               />
+              <Button
+                onClick={() => {
+                  setPicking(true);
+                  void pickFolder('Selecione a pasta do projeto')
+                    .then((selected) => {
+                      if (selected) {
+                        update('directory', selected);
+                        detect.mutate(selected);
+                      }
+                    })
+                    .finally(() => setPicking(false));
+                }}
+                disabled={picking}
+                className="shrink-0"
+                title={
+                  isTauriRuntime() ? 'Abrir seletor de pasta' : 'Disponível no aplicativo desktop'
+                }
+              >
+                {picking ? <Spinner /> : null}
+                Escolher pasta
+              </Button>
               <Button
                 onClick={() => detect.mutate(state.directory.trim())}
                 disabled={state.directory.trim() === '' || detect.isPending}
@@ -408,6 +442,11 @@ export function ProjectForm({
                   className="mono"
                 />
               </Field>
+              <p className="text-[11px] text-zinc-500 sm:col-span-2">
+                Use <span className="mono">start</span> para execução supervisionada sem watcher. Se
+                o script exigir build prévio (ex.: Next.js), prefira{' '}
+                <span className="mono">dev</span> ou rode o build antes.
+              </p>
             </div>
           ) : (
             <>
@@ -466,7 +505,7 @@ export function ProjectForm({
             <Field
               label="Porta"
               htmlFor="project-port"
-              hint="Opcional; usada para exibição e futura checagem de conflito."
+              hint="Usada para avisar conflito antes de iniciar e para o health check."
             >
               <Input
                 id="project-port"
@@ -575,115 +614,131 @@ export function ProjectForm({
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-4">
-            <Field label="maxRetries" htmlFor="policy-retries">
-              <Input
-                id="policy-retries"
-                value={state.maxRetries}
-                onChange={(event) => update('maxRetries', event.target.value)}
-                inputMode="numeric"
-              />
-            </Field>
-            <Field label="baseDelayMs" htmlFor="policy-base">
-              <Input
-                id="policy-base"
-                value={state.baseDelayMs}
-                onChange={(event) => update('baseDelayMs', event.target.value)}
-                inputMode="numeric"
-              />
-            </Field>
-            <Field label="maxDelayMs" htmlFor="policy-max">
-              <Input
-                id="policy-max"
-                value={state.maxDelayMs}
-                onChange={(event) => update('maxDelayMs', event.target.value)}
-                inputMode="numeric"
-              />
-            </Field>
-            <Field label="stableAfterMs" htmlFor="policy-stable">
-              <Input
-                id="policy-stable"
-                value={state.stableAfterMs}
-                onChange={(event) => update('stableAfterMs', event.target.value)}
-                inputMode="numeric"
-              />
-            </Field>
+          <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2">
+            <div>
+              <p className="text-xs font-medium text-zinc-300">Configuração avançada</p>
+              <p className="text-[11px] text-zinc-500">
+                Retry, timeouts e health check. Os padrões atendem a maioria dos casos.
+              </p>
+            </div>
+            <Button size="sm" onClick={() => setAdvancedOpen((value) => !value)}>
+              {advancedOpen ? 'Ocultar' : 'Mostrar'}
+            </Button>
           </div>
 
-          <Field
-            label="Timeout de encerramento gracioso (ms)"
-            htmlFor="project-graceful"
-            hint="No Windows o encerramento é forçado após uma janela curta."
-          >
-            <Input
-              id="project-graceful"
-              value={state.gracefulTimeoutMs}
-              onChange={(event) => update('gracefulTimeoutMs', event.target.value)}
-              inputMode="numeric"
-            />
-          </Field>
-
-          <div className="rounded-lg border border-zinc-800 p-3">
-            <Checkbox
-              label="Health check"
-              description="Dimensão separada do estado do processo (execução na Fase 5)"
-              checked={state.healthEnabled}
-              onChange={(checked) => update('healthEnabled', checked)}
-            />
-            {state.healthEnabled ? (
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <Field label="Tipo" htmlFor="health-type">
-                  <Select
-                    id="health-type"
-                    value={state.healthType}
-                    onChange={(event) =>
-                      update('healthType', event.target.value as ProjectFormState['healthType'])
-                    }
-                  >
-                    <option value="http">HTTP</option>
-                    <option value="tcp">TCP</option>
-                  </Select>
-                </Field>
-                <Field label="Alvo" htmlFor="health-target" className="sm:col-span-2">
+          {advancedOpen ? (
+            <>
+              <div className="grid gap-3 sm:grid-cols-4">
+                <Field label="maxRetries" htmlFor="policy-retries">
                   <Input
-                    id="health-target"
-                    value={state.healthTarget}
-                    onChange={(event) => update('healthTarget', event.target.value)}
-                    placeholder={
-                      state.healthType === 'http'
-                        ? 'http://127.0.0.1:3000/health'
-                        : '127.0.0.1:3000'
-                    }
-                    className="mono"
-                  />
-                </Field>
-                <Field label="intervalMs" htmlFor="health-interval">
-                  <Input
-                    id="health-interval"
-                    value={state.healthIntervalMs}
-                    onChange={(event) => update('healthIntervalMs', event.target.value)}
+                    id="policy-retries"
+                    value={state.maxRetries}
+                    onChange={(event) => update('maxRetries', event.target.value)}
                     inputMode="numeric"
                   />
                 </Field>
-                <Field label="timeoutMs" htmlFor="health-timeout">
+                <Field label="baseDelayMs" htmlFor="policy-base">
                   <Input
-                    id="health-timeout"
-                    value={state.healthTimeoutMs}
-                    onChange={(event) => update('healthTimeoutMs', event.target.value)}
+                    id="policy-base"
+                    value={state.baseDelayMs}
+                    onChange={(event) => update('baseDelayMs', event.target.value)}
                     inputMode="numeric"
                   />
                 </Field>
-                <Field label="failureThreshold" htmlFor="health-threshold">
+                <Field label="maxDelayMs" htmlFor="policy-max">
                   <Input
-                    id="health-threshold"
-                    value={state.healthFailureThreshold}
-                    onChange={(event) => update('healthFailureThreshold', event.target.value)}
+                    id="policy-max"
+                    value={state.maxDelayMs}
+                    onChange={(event) => update('maxDelayMs', event.target.value)}
+                    inputMode="numeric"
+                  />
+                </Field>
+                <Field label="stableAfterMs" htmlFor="policy-stable">
+                  <Input
+                    id="policy-stable"
+                    value={state.stableAfterMs}
+                    onChange={(event) => update('stableAfterMs', event.target.value)}
                     inputMode="numeric"
                   />
                 </Field>
               </div>
-            ) : null}
-          </div>
+
+              <Field
+                label="Timeout de encerramento gracioso (ms)"
+                htmlFor="project-graceful"
+                hint="No Windows o encerramento é forçado após uma janela curta."
+              >
+                <Input
+                  id="project-graceful"
+                  value={state.gracefulTimeoutMs}
+                  onChange={(event) => update('gracefulTimeoutMs', event.target.value)}
+                  inputMode="numeric"
+                />
+              </Field>
+
+              <div className="rounded-lg border border-zinc-800 p-3">
+                <Checkbox
+                  label="Health check"
+                  description="Dimensão separada do estado do processo (execução na Fase 5)"
+                  checked={state.healthEnabled}
+                  onChange={(checked) => update('healthEnabled', checked)}
+                />
+                {state.healthEnabled ? (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <Field label="Tipo" htmlFor="health-type">
+                      <Select
+                        id="health-type"
+                        value={state.healthType}
+                        onChange={(event) =>
+                          update('healthType', event.target.value as ProjectFormState['healthType'])
+                        }
+                      >
+                        <option value="http">HTTP</option>
+                        <option value="tcp">TCP</option>
+                      </Select>
+                    </Field>
+                    <Field label="Alvo" htmlFor="health-target" className="sm:col-span-2">
+                      <Input
+                        id="health-target"
+                        value={state.healthTarget}
+                        onChange={(event) => update('healthTarget', event.target.value)}
+                        placeholder={
+                          state.healthType === 'http'
+                            ? 'http://127.0.0.1:3000/health'
+                            : '127.0.0.1:3000'
+                        }
+                        className="mono"
+                      />
+                    </Field>
+                    <Field label="intervalMs" htmlFor="health-interval">
+                      <Input
+                        id="health-interval"
+                        value={state.healthIntervalMs}
+                        onChange={(event) => update('healthIntervalMs', event.target.value)}
+                        inputMode="numeric"
+                      />
+                    </Field>
+                    <Field label="timeoutMs" htmlFor="health-timeout">
+                      <Input
+                        id="health-timeout"
+                        value={state.healthTimeoutMs}
+                        onChange={(event) => update('healthTimeoutMs', event.target.value)}
+                        inputMode="numeric"
+                      />
+                    </Field>
+                    <Field label="failureThreshold" htmlFor="health-threshold">
+                      <Input
+                        id="health-threshold"
+                        value={state.healthFailureThreshold}
+                        onChange={(event) => update('healthFailureThreshold', event.target.value)}
+                        inputMode="numeric"
+                      />
+                    </Field>
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : null}
 
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
             <p className="text-[11px] uppercase tracking-wide text-zinc-500">Revisão</p>

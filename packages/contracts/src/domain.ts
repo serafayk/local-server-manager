@@ -90,6 +90,11 @@ export interface RuntimeSnapshot {
   updatedAt: string;
   /** Resultado da última checagem de porta no start (null = não verificado). */
   portInUse?: boolean | null;
+  /**
+   * Causa provável do último crash, extraída da saída do processo
+   * (ex.: porta ocupada, build ausente). Usada para orientar a correção.
+   */
+  lastFailureHint?: string | null;
 }
 
 export interface LogRecord {

@@ -258,7 +258,20 @@ pnpm --filter @lsm/desktop tauri:build
 - **Node instalado**: o cadastro lista NVM (`NVM_HOME`), instalação do sistema e
   o Node do Engine, preenchendo o caminho absoluto do executável.
 
-## 11. Limitações conhecidas (Fase 7+)
+## 11. Configuração assistida (Fase 8)
+
+- **Adicionar pela raiz** (`POST /projects/scan-root`): detecta workspaces, lê portas de
+  `.env`/`*.config.ts`/`-p` no script e o endpoint `/health`. A UI revisa antes de criar.
+- **Seletor de pasta** nativo (`pick_folder`) no shell Tauri; no navegador resta o campo
+  de texto.
+- **Editar** disponível na lista e no detalhe; com o projeto ativo, oferece "Parar e
+  editar". **Duplicar** cria outro projeto a partir da configuração.
+- **Falha fatal não gera loop**: `EADDRINUSE`, build ausente, módulo ausente,
+  `ECONNREFUSED` e `EACCES` interrompem o retry, marcam `FAILED` e expõem
+  `lastFailureHint` no snapshot (evento `project.recovery.aborted`). O log do crash é
+  preservado; corrija a causa e inicie manualmente.
+
+## 12. Limitações conhecidas (Fase 7+)
 
 1. **Assinatura e updater automático** — o instalador NSIS é gerado, mas assinatura de código e atualização automática ficam para a Fase 7.
 2. **Sem single-instance do desktop** — abrir o app duas vezes abre duas janelas (o Engine continua único por diretório de dados).
@@ -270,7 +283,7 @@ pnpm --filter @lsm/desktop tauri:build
 8. **Stop no Windows é forçado** — janela cooperativa curta (ADR-011).
 9. **Retenção sem limite global de disco** — hoje é por projeto/dias.
 
-## 12. Dados e privacidade
+## 13. Dados e privacidade
 
 - Banco: `%LOCALAPPDATA%\LocalServerManager\data\manager.sqlite`
 - Logs de processo: `%LOCALAPPDATA%\LocalServerManager\logs\<projectId>\<instanceId>.log`

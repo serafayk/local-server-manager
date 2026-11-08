@@ -1,5 +1,5 @@
 import { createServer } from 'node:net';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   DetectProjectResponse,
@@ -11,6 +11,7 @@ import type {
   ProjectGroup,
   ProjectSummary,
   RuntimeSnapshot,
+  ScanRootResponse,
 } from '@lsm/contracts';
 import { createLogger, createNoopSink } from '@lsm/shared';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -533,6 +534,37 @@ describe('API local — monitoramento', () => {
     );
     expect(imported.status).toBe(200);
     expect(expectData(imported.result).results[0]?.success).toBe(false);
+  });
+
+  it('varre a raiz do repositório e propõe projetos', async () => {
+    const { api } = await boot();
+    const root = createTempDir('lsm-api-scan-');
+    mkdirSync(join(root, 'apps', 'core'), { recursive: true });
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'api-demo', private: true }),
+      'utf8',
+    );
+    writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - "apps/*"\n', 'utf8');
+    writeFileSync(
+      join(root, 'apps', 'core', 'package.json'),
+      JSON.stringify({ name: '@demo/core', scripts: { start: 'node index.js' } }),
+      'utf8',
+    );
+
+    try {
+      const response = await apiCall<ScanRootResponse>(api, 'POST', '/api/v1/projects/scan-root', {
+        directory: root,
+      });
+      expect(response.status).toBe(200);
+      const data = expectData(response.result);
+      expect(data.isMonorepo).toBe(true);
+      expect(data.projects).toHaveLength(1);
+      expect(data.projects[0]?.script).toBe('start');
+      expect(data.projects[0]?.relativeDirectory).toBe('apps/core');
+    } finally {
+      removeTempDir(root);
+    }
   });
 
   it('lista versões de Node detectadas', async () => {

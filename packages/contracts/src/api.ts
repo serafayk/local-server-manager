@@ -155,6 +155,40 @@ export interface DetectProjectResponse {
   packageManagerConfirmed: boolean;
 }
 
+/** Origem da porta detectada ao varrer a raiz de um repositório. */
+export type ScanPortSource = 'env' | 'config' | 'script' | 'none';
+
+/**
+ * Candidato a projeto encontrado em uma varredura da raiz do repositório.
+ * Tudo aqui é sugestão editável; nada é criado sem confirmação.
+ */
+export interface ScannedProject {
+  name: string;
+  packageName: string | null;
+  directory: string;
+  relativeDirectory: string;
+  packageManager: 'npm' | 'pnpm' | 'yarn' | 'bun';
+  /** Script escolhido automaticamente (`start`, `dev` ou o primeiro disponível). */
+  script: string | null;
+  availableScripts: string[];
+  runnable: boolean;
+  /** Sugestão de seleção inicial na tela de revisão. */
+  recommended: boolean;
+  port: number | null;
+  portSource: ScanPortSource;
+  healthType: 'http' | 'tcp';
+  healthTarget: string | null;
+  startupOrder: number;
+  notes: string[];
+}
+
+export interface ScanRootResponse {
+  root: string;
+  isMonorepo: boolean;
+  groupSuggestion: string;
+  projects: ScannedProject[];
+}
+
 export interface ImportProjectRequest {
   directory: string;
   name?: string;

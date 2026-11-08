@@ -307,4 +307,35 @@ describe('ProjectRuntime — ciclo de vida com processos reais', () => {
     await engine.supervisor.stopProject(project.id);
     expect(() => engine.projects.deleteProject(project.id)).not.toThrow();
   });
+
+  it('aborta o retry e explica a causa quando a falha não é recuperável', async () => {
+    const engine = await bootEngine();
+    const project = addProject(engine, {
+      runtime: { executable: process.execPath, args: [fixturePath('fail-with-hint.mjs')] },
+      restartPolicy: {
+        enabled: true,
+        maxRetries: 5,
+        baseDelayMs: 100,
+        maxDelayMs: 200,
+        jitterRatio: 0,
+        stableAfterMs: 60_000,
+        resetRetriesAfterStable: true,
+      },
+    });
+
+    await engine.supervisor.startProject(project.id);
+    await waitFor(() => statusOf(engine, project.id) === 'FAILED', {
+      timeoutMs: 8_000,
+      description: 'FAILED após falha fatal',
+    });
+
+    const snapshot = engine.supervisor.getSnapshot(project.id);
+    expect(snapshot.lastFailureHint).toContain('Porta');
+    expect(snapshot.restartAttempt).toBe(0);
+    expect(
+      engine.projects
+        .listEvents({ projectId: project.id, limit: 50 })
+        .map((event) => event.eventType),
+    ).toContain('project.recovery.aborted');
+  });
 });

@@ -8,6 +8,10 @@ export const detectProjectRequestSchema = z.strictObject({
   directory: workingDirectorySchema,
 });
 
+export const scanRootRequestSchema = z.strictObject({
+  directory: workingDirectorySchema,
+});
+
 export const importProjectRequestSchema = z.strictObject({
   directory: workingDirectorySchema,
   name: projectNameSchema.optional(),
@@ -36,6 +40,7 @@ export const restoreBackupRequestSchema = z.strictObject({
 });
 
 export type DetectProjectInput = z.output<typeof detectProjectRequestSchema>;
+export type ScanRootInput = z.output<typeof scanRootRequestSchema>;
 export type ImportProjectInput = z.output<typeof importProjectRequestSchema>;
 export type BulkProjectsInput = z.output<typeof bulkProjectsRequestSchema>;
 export type RestoreBackupInput = z.output<typeof restoreBackupRequestSchema>;
@@ -57,6 +62,10 @@ function parse<T>(schema: z.ZodType<T>, input: unknown, label: string): T {
 
 export function parseDetectProjectRequest(input: unknown): DetectProjectInput {
   return parse(detectProjectRequestSchema, input, 'detecção de projeto');
+}
+
+export function parseScanRootRequest(input: unknown): ScanRootInput {
+  return parse(scanRootRequestSchema, input, 'varredura da raiz do projeto');
 }
 
 export function parseImportProjectRequest(input: unknown): ImportProjectInput {
