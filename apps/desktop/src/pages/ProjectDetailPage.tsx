@@ -10,13 +10,21 @@ import {
   useProjectLogs,
   useProjectQuery,
 } from '../lib/hooks';
-import { formatCommand, formatDateTime, formatUptime, shortId } from '../lib/format';
+import {
+  formatBytes,
+  formatCommand,
+  formatDateTime,
+  formatDuration,
+  formatUptime,
+  isNumber,
+  shortId,
+} from '../lib/format';
 import { mergeLogRecords } from '../lib/logs';
 import { useAppStore } from '../stores/app-store';
 import { LogViewer } from '../components/LogViewer';
 import { ProjectForm } from '../components/ProjectForm';
 import { HealthBadge, StatusBadge, isActiveStatus } from '../components/status';
-import { PageHeader } from '../components/page';
+import { PageHeader, StatCard } from '../components/page';
 import {
   Button,
   Card,
@@ -64,6 +72,8 @@ export function ProjectDetailPage() {
   const [autoScroll, setAutoScroll] = useState(true);
 
   const live = useAppStore((state) => (id ? (state.logsByProject[id] ?? EMPTY_LOGS) : EMPTY_LOGS));
+  const projectMetrics = useAppStore((state) => (id ? state.metricsByProject[id] : undefined));
+  const healthNote = useAppStore((state) => (id ? state.healthNotes[id] : undefined));
   const history = useProjectLogs(id, instanceId, 500);
 
   const project = query.data;
@@ -176,6 +186,17 @@ export function ProjectDetailPage() {
                 value={<span className="mono text-xs">{shortId(runtime.instanceId, 12)}</span>}
               />
               <Definition label="Uptime" value={formatUptime(runtime.startedAt)} />
+              <Definition
+                label="Saúde"
+                value={
+                  <span className="flex flex-wrap items-center gap-1">
+                    <HealthBadge health={runtime.health} />
+                    {healthNote ? (
+                      <span className="text-[11px] text-zinc-500">{healthNote}</span>
+                    ) : null}
+                  </span>
+                }
+              />
               <Definition label="Iniciado em" value={formatDateTime(runtime.startedAt)} />
               <Definition label="Tentativas" value={runtime.restartAttempt} />
             </dl>
@@ -358,11 +379,36 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'metrics' ? (
-        <div className="mt-4">
-          <EmptyState
-            title="Métricas chegam na Fase 5"
-            description="CPU, memória e uptime por processo serão coletados sem impactar o Engine."
-          />
+        <div className="mt-4 space-y-4">
+          {projectMetrics ? (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <StatCard
+                  label="CPU"
+                  value={
+                    isNumber(projectMetrics.cpuPercent)
+                      ? `${projectMetrics.cpuPercent.toFixed(1)}%`
+                      : '—'
+                  }
+                  hint="Primeira amostra não tem delta"
+                />
+                <StatCard
+                  label="RAM (working set)"
+                  value={formatBytes(projectMetrics.memoryBytes)}
+                />
+                <StatCard label="Uptime" value={formatDuration(projectMetrics.uptimeMs)} />
+                <StatCard label="PID" value={projectMetrics.pid} />
+              </div>
+              <p className="text-xs text-zinc-600">
+                Amostragem periódica do Engine; CPU normalizada pelo total de núcleos.
+              </p>
+            </>
+          ) : (
+            <EmptyState
+              title="Aguardando a primeira amostra"
+              description="Métricas são coletadas a cada poucos segundos apenas para projetos em execução."
+            />
+          )}
         </div>
       ) : null}
 

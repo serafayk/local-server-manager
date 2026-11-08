@@ -2,6 +2,24 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.6.0] — 2026-11-08
+
+### Fase 5 — Monitoramento
+
+- Health check HTTP/TCP por projeto, independente do estado do processo, com `intervalMs`, `timeoutMs`, `failureThreshold` e `expectedStatus`.
+- Saúde `UNKNOWN/HEALTHY/UNHEALTHY` com transições por threshold e recuperação; evento `project.health.changed` com detalhe.
+- `restartOnUnhealthy` usa o restart controlado com cooldown persistente entre ciclos.
+- Detecção de conflito de porta no start por bind exclusivo em loopback, dono via `netstat` (best-effort), evento `project.port.conflict` e `portInUse` no snapshot — sem bloquear nem matar o ocupante.
+- Métricas de CPU/memória em lote via PowerShell (`Get-Process`), CPU normalizada por núcleo com delta entre amostras e `null` na primeira leitura.
+- Eventos `project.metrics`/`system.metrics`; intervalo configurável (mín. 1 s) e coleta não fatal.
+- API: `GET /system/metrics`, `GET /ports`, `GET /ports/:port`.
+- UI: cartões de CPU/RAM no Dashboard, alerta de porta em uso na tabela, aba Métricas do projeto com dados ao vivo e nota de saúde nos detalhes.
+- 32 novos testes; total de 245.
+
+### Limitações desta versão
+
+- CPU/memória e dono da porta são melhor esforço; instalador/updater ficam na Fase 6.
+
 ## [0.5.0] — 2026-11-07
 
 ### Fase 4b — Shell Tauri 2

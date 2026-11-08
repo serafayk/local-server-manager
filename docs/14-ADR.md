@@ -2,6 +2,37 @@
 
 Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicionadas no topo com data, contexto, decisão, alternativas e consequências.
 
+## ADR-016 — Health check, portas e métricas
+
+**Status:** Aceita (Fase 5)
+
+**Contexto:** Processo ativo não significa aplicação saudável; conflito de porta e consumo de recursos precisam de diagnóstico sem comprometer o supervisor.
+
+**Decisão:**
+
+1. **Health check** roda em `HealthMonitor` próprio, independente do estado do processo:
+   - HTTP (`GET`, status esperado) ou TCP (`host:porta`), com `timeoutMs`, `intervalMs` e `failureThreshold`;
+   - saúde é `UNKNOWN`/`HEALTHY`/`UNHEALTHY` e nunca altera `status` por si só;
+   - `restartOnUnhealthy` usa o restart controlado existente, com `unhealthyRestartCooldownMs` persistente entre ciclos para evitar loop;
+   - monitor inicia em `RUNNING` e para no stop/exit; saúde volta a `UNKNOWN` no encerramento.
+2. **Portas**:
+   - disponibilidade por bind exclusivo em `127.0.0.1` (socket fechado imediatamente);
+   - dono da porta via `netstat -ano -p tcp` (melhor esforço);
+   - conflito **não bloqueia** o start e **não mata** o ocupante; gera `project.port.conflict`, log e `portInUse` no snapshot;
+   - rotas `GET /ports` e `GET /ports/:port`.
+3. **Métricas**:
+   - amostragem em intervalo configurável (`metricsIntervalMs`, mínimo 1 s);
+   - uma chamada PowerShell em lote (`Get-Process -Id ... | Select Id,CPU,WorkingSet64`);
+   - CPU normalizada pelo total de núcleos, calculada por delta entre amostras (primeira amostra é `null`);
+   - memória = `WorkingSet64`;
+   - falha de leitura é não fatal e mantém a última amostra;
+   - eventos `project.metrics`/`system.metrics`; **não** persistir métricas no SQLite;
+   - `GET /system/metrics` retorna a última amostra (coleta se ainda não houver).
+
+**Alternativas consideradas:** `pidusage` (depende de `wmic`, removido em versões recentes do Windows); persistir métricas em SQLite (volume alto, sem valor histórico nesta fase).
+
+**Consequências:** diagnóstico operacional sem risco ao supervisor. CPU de processos protegidos pode vir `null`; o dono da porta pode não ser identificado sem privilégios. Health check consome uma requisição por intervalo por projeto — o padrão de 30 s evita ruído.
+
 ## ADR-015 — Interface desktop: SPA React + shell Tauri 2
 
 **Status:** Aceita (Fase 4 concluída em 2026-11-07)

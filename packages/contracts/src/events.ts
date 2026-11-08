@@ -55,6 +55,13 @@ export interface DomainEventPayloads {
     projectId: string;
     health: HealthStatus;
     previousHealth: HealthStatus;
+    detail?: string;
+  };
+  'project.port.conflict': {
+    projectId: string;
+    port: number;
+    inUse: boolean;
+    ownerPid: number | null;
   };
   'project.log': LogRecord;
   'project.metrics': ProjectMetricsPayload;
@@ -79,6 +86,7 @@ export const DOMAIN_EVENT_TYPES = [
   'project.restart.started',
   'project.recovery.exhausted',
   'project.health.changed',
+  'project.port.conflict',
   'project.log',
   'project.metrics',
   'system.metrics',

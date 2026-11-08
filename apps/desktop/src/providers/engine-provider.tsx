@@ -32,6 +32,9 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const appendLog = useAppStore((state) => state.appendLog);
   const setConnection = useAppStore((state) => state.setConnection);
+  const setProjectMetrics = useAppStore((state) => state.setProjectMetrics);
+  const setSystemMetrics = useAppStore((state) => state.setSystemMetrics);
+  const setHealthNote = useAppStore((state) => state.setHealthNote);
   const connection = useAppStore((state) => state.connection);
 
   const [endpoint, setEndpoint] = useState<EngineEndpoint | null>(null);
@@ -71,11 +74,26 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     }
     const socket = new EngineSocket(endpoint, {
       onStatus: setConnection,
-      onEvent: (event) => applyEngineEvent(event, { queryClient, appendLog }),
+      onEvent: (event) =>
+        applyEngineEvent(event, {
+          queryClient,
+          appendLog,
+          setProjectMetrics,
+          setSystemMetrics,
+          setHealthNote,
+        }),
     });
     socket.connect();
     return () => socket.close();
-  }, [endpoint, queryClient, appendLog, setConnection]);
+  }, [
+    endpoint,
+    queryClient,
+    appendLog,
+    setConnection,
+    setProjectMetrics,
+    setSystemMetrics,
+    setHealthNote,
+  ]);
 
   useEffect(() => {
     if (connection === 'open') {

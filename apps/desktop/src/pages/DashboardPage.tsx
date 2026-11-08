@@ -5,10 +5,11 @@ import { useProjectActions } from '../lib/actions';
 import { queryKeys } from '../lib/queries';
 import { useProjectsQuery } from '../lib/hooks';
 import { useEngine, useConnectionStatus } from '../providers/engine-provider';
+import { useAppStore } from '../stores/app-store';
 import { ProjectTable } from '../components/ProjectTable';
 import { PageHeader, StatCard } from '../components/page';
 import { Button, Card, EmptyState, ErrorBanner } from '../components/ui';
-import { formatDuration } from '../lib/format';
+import { formatBytes, formatDuration, isNumber } from '../lib/format';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ export function DashboardPage() {
   const connection = useConnectionStatus();
   const projectsQuery = useProjectsQuery();
   const actions = useProjectActions();
+  const systemMetrics = useAppStore((state) => state.systemMetrics);
 
   const health = useQuery({
     queryKey: queryKeys.health,
@@ -49,7 +51,7 @@ export function DashboardPage() {
 
       {actionError ? <ErrorBanner message={actionError.message} /> : null}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Executando" value={running} tone="emerald" />
         <StatCard label="Parados" value={stopped} />
         <StatCard label="Com falha" value={problems} tone={problems > 0 ? 'red' : 'zinc'} />
@@ -57,7 +59,19 @@ export function DashboardPage() {
           label="Não saudáveis"
           value={unhealthy}
           tone={unhealthy > 0 ? 'amber' : 'zinc'}
-          hint="Health check da Fase 5"
+          hint="Health check"
+        />
+        <StatCard
+          label="CPU gerenciada"
+          value={
+            isNumber(systemMetrics?.cpuPercent) ? `${systemMetrics.cpuPercent.toFixed(1)}%` : '—'
+          }
+          hint="Soma dos processos"
+        />
+        <StatCard
+          label="RAM gerenciada"
+          value={formatBytes(systemMetrics?.memoryBytes ?? null)}
+          hint="Working set"
         />
         <StatCard
           label="Engine"

@@ -20,7 +20,10 @@ import {
   parseImportProjectRequest,
 } from '@lsm/validation';
 import type { EventBus } from '../core/event-bus';
+import { runWithConcurrency } from '../core/concurrency';
 import type { LogManager } from '../log-manager/log-manager';
+import type { MetricsCollector } from '../metrics/metrics-collector';
+import { checkPort } from '../ports/port-checker';
 import type { ProjectService } from '../supervisor/project-service';
 import type { Supervisor } from '../supervisor/supervisor';
 import { extractBearerToken, extractQueryToken, tokensMatch } from './auth';
@@ -45,6 +48,7 @@ export interface ApiServerOptions {
   events: EventBus;
   clock: Clock;
   logger: Logger;
+  metrics: MetricsCollector;
   engineInfo: () => EngineInfo;
   getSettings: () => EngineSettings;
   updateSettings: (input: unknown) => EngineSettings;
@@ -285,6 +289,39 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
 
     instance.get('/api/v1/settings', async (request, reply) => {
       return sendSuccess(reply, options.getSettings(), requestIdOf(request));
+    });
+
+    instance.get('/api/v1/system/metrics', async (request, reply) => {
+      const snapshot = options.metrics.latest() ?? (await options.metrics.collectNow());
+      return sendSuccess(reply, snapshot, requestIdOf(request));
+    });
+
+    instance.get('/api/v1/ports/:port', async (request, reply) => {
+      const params = request.params as { port?: unknown };
+      const port = Number(params.port);
+      if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+        throw new AppError('VALIDATION_ERROR', `porta inválida: ${String(params.port)}`);
+      }
+      return sendSuccess(reply, await checkPort(port), requestIdOf(request));
+    });
+
+    instance.get('/api/v1/ports', async (request, reply) => {
+      const summaries = options.projects
+        .listProjects()
+        .filter((summary) => summary.config.port !== null);
+
+      const results = await runWithConcurrency(summaries, 4, async (summary) => {
+        const port = summary.config.port as number;
+        const check = await checkPort(port);
+        return {
+          projectId: summary.config.id,
+          name: summary.config.name,
+          port: check.port,
+          inUse: check.inUse,
+          ownerPid: check.ownerPid,
+        };
+      });
+      return sendSuccess(reply, results, requestIdOf(request));
     });
 
     instance.put('/api/v1/settings', async (request, reply) => {

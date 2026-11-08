@@ -20,6 +20,8 @@ import type { LogManager } from '../log-manager/log-manager';
 import type { ProcessManager } from '../process-manager/process-manager';
 import type { ExitInfo, ManagedProcess } from '../process-manager/spawn-adapter';
 import { RecoveryManager } from '../recovery/recovery-manager';
+import { HealthMonitor } from '../health-monitor/health-monitor';
+import { checkPort } from '../ports/port-checker';
 
 export const ACTIVE_STATUSES: readonly ProjectStatus[] = [
   'STARTING',
@@ -70,6 +72,8 @@ export class ProjectRuntime {
   private exitWaiters: Array<() => void> = [];
   private readonly queue = new OperationQueue();
   private readonly recovery: RecoveryManager;
+  private readonly healthMonitor: HealthMonitor;
+  private portInUseValue: boolean | null = null;
   private disposed = false;
 
   constructor(private readonly deps: ProjectRuntimeDeps) {
@@ -82,6 +86,12 @@ export class ProjectRuntime {
         onRetry: (attempt) => this.handleRecoveryRetry(attempt),
         onStable: (previousAttempts) => this.handleStable(previousAttempts),
       },
+    });
+    this.healthMonitor = new HealthMonitor({
+      config: deps.config.healthCheck,
+      clock: deps.clock,
+      onChanged: (health, detail) => this.handleHealthChanged(health, detail),
+      onRestartRequested: (detail) => this.handleHealthRestart(detail),
     });
   }
 
@@ -109,6 +119,7 @@ export class ProjectRuntime {
       restartAttempt: this.restartAttemptValue,
       lastExit: this.lastExitValue,
       updatedAt: this.updatedAtValue,
+      portInUse: this.portInUseValue,
     };
   }
 
@@ -122,6 +133,7 @@ export class ProjectRuntime {
     }
     this.configValue = config;
     this.recovery.updatePolicy(config.restartPolicy);
+    this.healthMonitor.updateConfig(config.healthCheck);
   }
 
   start(reason: StartReason = 'USER'): Promise<void> {
@@ -161,6 +173,7 @@ export class ProjectRuntime {
     });
     this.disposed = true;
     this.recovery.dispose();
+    this.healthMonitor.stop();
   }
 
   private async doStart(reason: StartReason): Promise<void> {
@@ -192,6 +205,7 @@ export class ProjectRuntime {
     this.finalizedInstanceId = null;
     this.exitWaiters = [];
     this.stopReason = null;
+    this.portInUseValue = null;
     this.desired = 'RUNNING';
 
     this.transition('STARTING');
@@ -215,6 +229,8 @@ export class ProjectRuntime {
       args: spec.args,
       cwd: spec.cwd,
     });
+
+    await this.checkConfiguredPort(instanceId);
 
     let managed: ManagedProcess;
     try {
@@ -280,6 +296,7 @@ export class ProjectRuntime {
     this.transition('RUNNING');
     this.restartAttemptValue = this.recovery.attempts;
     this.recovery.markRunning();
+    this.healthMonitor.start();
     this.deps.logManager.recordSystem(
       this.projectId,
       instanceId,
@@ -306,6 +323,8 @@ export class ProjectRuntime {
     const instanceId = this.instanceIdValue;
     const pid = this.pidValue;
 
+    this.healthMonitor.stop();
+    this.resetHealth('processo parando');
     this.recovery.reset();
     this.desired = 'STOPPED';
     this.stopReason = reason;
@@ -369,6 +388,9 @@ export class ProjectRuntime {
     this.pidValue = null;
     this.startedAtValue = null;
     this.lastExitValue = exitInfo;
+    this.healthMonitor.stop();
+    this.resetHealth('processo encerrado');
+    this.portInUseValue = null;
     if (!isCrash) {
       this.desired = 'STOPPED';
     }
@@ -539,6 +561,121 @@ export class ProjectRuntime {
         previousAttempts,
       });
     }
+  }
+
+  private async checkConfiguredPort(instanceId: string): Promise<void> {
+    const port = this.configValue.port;
+    if (port === null) {
+      return;
+    }
+    try {
+      const check = await checkPort(port);
+      this.portInUseValue = check.inUse;
+      this.updatedAtValue = this.deps.clock.nowIso();
+      this.deps.events.emit(
+        'project.state.changed',
+        { snapshot: this.snapshot(), previousStatus: this.statusValue },
+        this.projectId,
+      );
+      if (!check.inUse) {
+        return;
+      }
+      const message = `porta ${port} já está em uso (pid ${check.ownerPid ?? 'desconhecido'})`;
+      this.persistEvent('warn', 'project.port.conflict', message, {
+        port,
+        ownerPid: check.ownerPid,
+      });
+      this.deps.logManager.recordSystem(this.projectId, instanceId, message);
+      this.deps.events.emit(
+        'project.port.conflict',
+        {
+          projectId: this.projectId,
+          port,
+          inUse: true,
+          ownerPid: check.ownerPid,
+        },
+        this.projectId,
+      );
+    } catch (error) {
+      this.deps.logger.warn(
+        'Falha ao verificar a porta configurada',
+        { projectId: this.projectId, port },
+        error,
+      );
+      this.portInUseValue = null;
+    }
+  }
+
+  private handleHealthChanged(health: HealthStatus, detail: string): void {
+    if (this.disposed || this.healthValue === health) {
+      return;
+    }
+    const previous = this.healthValue;
+    this.healthValue = health;
+    this.updatedAtValue = this.deps.clock.nowIso();
+
+    this.deps.events.emit(
+      'project.health.changed',
+      { projectId: this.projectId, health, previousHealth: previous, detail },
+      this.projectId,
+    );
+    this.persistEvent(
+      health === 'UNHEALTHY' ? 'warn' : 'info',
+      'project.health.changed',
+      `health ${previous} -> ${health} (${detail})`,
+      { health, previousHealth: previous, detail },
+    );
+    if (this.instanceIdValue) {
+      this.deps.logManager.recordSystem(
+        this.projectId,
+        this.instanceIdValue,
+        `health ${health}: ${detail}`,
+      );
+    }
+  }
+
+  private resetHealth(detail: string): void {
+    if (this.healthValue === 'UNKNOWN') {
+      return;
+    }
+    const previous = this.healthValue;
+    this.healthValue = 'UNKNOWN';
+    this.updatedAtValue = this.deps.clock.nowIso();
+    this.deps.events.emit(
+      'project.health.changed',
+      { projectId: this.projectId, health: 'UNKNOWN', previousHealth: previous, detail },
+      this.projectId,
+    );
+    this.persistEvent(
+      'info',
+      'project.health.changed',
+      `health ${previous} -> UNKNOWN (${detail})`,
+      { health: 'UNKNOWN', previousHealth: previous, detail },
+    );
+  }
+
+  private handleHealthRestart(detail: string): void {
+    if (this.disposed || this.statusValue !== 'RUNNING') {
+      return;
+    }
+    void this.queue.run(async () => {
+      if (this.statusValue !== 'RUNNING') {
+        return;
+      }
+      this.persistEvent('warn', 'project.health.restart', 'reinício solicitado pelo health check', {
+        detail,
+      });
+      try {
+        await this.doStop('HEALTH_RESTART');
+        await this.doStart('HEALTH_RESTART');
+      } catch (error) {
+        this.deps.logger.error(
+          'Falha no restart solicitado pelo health check',
+          { projectId: this.projectId },
+          error,
+        );
+      }
+    });
   }
 
   private resolveTerminationReason(spawnError?: Error): TerminationReason {

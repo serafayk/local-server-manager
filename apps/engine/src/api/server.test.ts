@@ -1,3 +1,4 @@
+import { createServer } from 'node:net';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
@@ -90,6 +91,22 @@ function fixtureProjectBody(overrides: Record<string, unknown> = {}): Record<str
     shutdown: { gracefulTimeoutMs: 1_000 },
     ...overrides,
   };
+}
+
+async function reservePort(): Promise<number> {
+  const server = createServer();
+  return new Promise<number>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        reject(new Error('sem endereço'));
+        return;
+      }
+      const port = address.port;
+      server.close(() => resolve(port));
+    });
+  });
 }
 
 function websocketUrl(api: EngineApiInfo): string {
@@ -390,6 +407,67 @@ describe('API local — projetos', () => {
     expect(rejected.result.success).toBe(false);
     if (!rejected.result.success) {
       expect(rejected.result.error.code).toBe('VALIDATION_ERROR');
+    }
+  });
+});
+
+describe('API local — monitoramento', () => {
+  it('expõe métricas do sistema', async () => {
+    const { engine, api } = await boot();
+    const created = await apiCall<ProjectConfig>(
+      api,
+      'POST',
+      '/api/v1/projects',
+      fixtureProjectBody(),
+    );
+    const project = expectData(created.result);
+    await apiCall(api, 'POST', `/api/v1/projects/${project.id}/start`);
+
+    await engine.metrics.collectNow();
+
+    const metrics = await apiCall<{
+      projects: Array<{ projectId: string; pid: number }>;
+      system: { running: number; managedProcesses: number };
+    }>(api, 'GET', '/api/v1/system/metrics');
+
+    const data = expectData(metrics.result);
+    expect(data.projects.some((item) => item.projectId === project.id && item.pid > 0)).toBe(true);
+    expect(data.system.running).toBe(1);
+
+    await apiCall(api, 'POST', `/api/v1/projects/${project.id}/stop`);
+  });
+
+  it('consulta ocupação de porta sem matar o ocupante', async () => {
+    const { api } = await boot();
+    const port = await reservePort();
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', () => resolve()));
+
+    try {
+      const created = await apiCall<ProjectConfig>(
+        api,
+        'POST',
+        '/api/v1/projects',
+        fixtureProjectBody({ port, portSource: 'fixed' }),
+      );
+      const project = expectData(created.result);
+
+      const single = await apiCall<{ port: number; inUse: boolean; ownerPid: number | null }>(
+        api,
+        'GET',
+        `/api/v1/ports/${port}`,
+      );
+      expect(expectData(single.result).inUse).toBe(true);
+
+      const list = await apiCall<Array<{ projectId: string; port: number; inUse: boolean }>>(
+        api,
+        'GET',
+        '/api/v1/ports',
+      );
+      const entry = expectData(list.result).find((item) => item.projectId === project.id);
+      expect(entry?.inUse).toBe(true);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
 });

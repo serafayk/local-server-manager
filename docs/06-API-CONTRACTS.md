@@ -69,8 +69,9 @@ gerado pelo Engine. Não retornar stack trace; o stack completo fica no log inte
 | GET    | `/api/v1/settings`               | Configuração do Engine                     |
 | PUT    | `/api/v1/settings`               | Atualiza configuração                      |
 | GET    | `/api/v1/ws`                     | WebSocket de eventos                       |
-| GET    | `/api/v1/system/metrics`         | Métricas globais (Fase 5)                  |
-| GET    | `/api/v1/ports/:port`            | Ocupação de porta (Fase 5)                 |
+| GET    | `/api/v1/system/metrics`         | Métricas atuais dos processos              |
+| GET    | `/api/v1/ports`                  | Ocupação das portas configuradas           |
+| GET    | `/api/v1/ports/:port`            | Ocupação de uma porta                      |
 
 `PUT /projects/:id` é uma atualização parcial: campos ausentes preservam o
 valor atual e o resultado passa pela validação completa. Projeto em execução
@@ -98,6 +99,7 @@ Tipos:
 - `project.restart.started`
 - `project.recovery.exhausted`
 - `project.health.changed`
+- `project.port.conflict`
 - `project.log`
 - `project.metrics`
 - `system.metrics`

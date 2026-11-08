@@ -24,6 +24,7 @@ import { EventBus } from '../core/event-bus';
 import { LogManager } from '../log-manager/log-manager';
 import { runLogRetention } from '../log-manager/log-retention';
 import { ProcessManager } from '../process-manager/process-manager';
+import { MetricsCollector } from '../metrics/metrics-collector';
 import { ProjectService } from '../supervisor/project-service';
 import { Supervisor } from '../supervisor/supervisor';
 import { reconcileInstances } from './reconciliation';
@@ -52,6 +53,7 @@ export interface Engine {
   readonly processManager: ProcessManager;
   readonly supervisor: Supervisor;
   readonly projects: ProjectService;
+  readonly metrics: MetricsCollector;
   start(): Promise<void>;
   shutdown(reason?: string): Promise<void>;
   info(): EngineInfo;
@@ -99,6 +101,37 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     events,
     clock,
     logger,
+  });
+  const metrics = new MetricsCollector({
+    clock,
+    logger,
+    events,
+    intervalMs: DEFAULT_ENGINE_SETTINGS.metricsIntervalMs,
+    targets: () => {
+      const summaries = supervisor.listSummaries();
+      const targets = summaries.flatMap((summary) =>
+        summary.runtime.status === 'RUNNING' && summary.runtime.pid !== null
+          ? [
+              {
+                projectId: summary.config.id,
+                pid: summary.runtime.pid,
+                startedAt: summary.runtime.startedAt,
+              },
+            ]
+          : [],
+      );
+      return {
+        targets,
+        stats: {
+          managed: summaries.length,
+          running: targets.length,
+          crashed: summaries.filter(
+            (summary) =>
+              summary.runtime.status === 'CRASHED' || summary.runtime.status === 'FAILED',
+          ).length,
+        },
+      };
+    },
   });
 
   let lock: InstanceLock | null = null;
@@ -152,6 +185,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     processManager,
     supervisor,
     projects,
+    metrics,
 
     async start(): Promise<void> {
       if (started || starting) {
@@ -201,6 +235,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
           events,
           clock,
           logger,
+          metrics,
           engineInfo: () => engine.info(),
           getSettings: () => engineSettings,
           updateSettings: (input: unknown): EngineSettings => {
@@ -214,6 +249,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
             repositories.settings.set(ENGINE_SETTINGS_KEY, merged);
             engineSettings = merged;
             supervisor.setBatchConcurrency(merged.batchConcurrency);
+            metrics.setIntervalMs(merged.metricsIntervalMs);
             logger.info('Configuração do Engine atualizada', { ...merged });
             return merged;
           },
@@ -246,6 +282,8 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
 
         runRetention();
         scheduleRetention();
+        metrics.setIntervalMs(engineSettings.metricsIntervalMs);
+        metrics.start();
 
         await supervisor.startBootProjects(new Set(reconciliation.blockedProjectIds));
       } catch (error) {
@@ -283,6 +321,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
         });
         apiServer = null;
         apiInfo = null;
+        metrics.stop();
         await supervisor.shutdown();
         await logManager.closeAll();
       } finally {

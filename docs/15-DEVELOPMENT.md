@@ -209,18 +209,36 @@ pnpm --filter @lsm/desktop tauri:build
   (ou `LSM_DATA_DIR\engine\shell.log`) registra descoberta, caminhos de
   recurso, spawn e reutilização do Engine.
 
-## 8. Limitações conhecidas (Fase 5+)
+## 8. Monitoramento (Fase 5)
+
+- **Health check** (config por projeto): HTTP com status esperado ou TCP
+  `host:porta`; `intervalMs` (mín. 1 s), `timeoutMs`, `failureThreshold`.
+  Saúde é exibida junto do estado (`RUNNING · UNHEALTHY`) e não altera o
+  `status`. `restartOnUnhealthy` reinicia pelo caminho controlado respeitando
+  `unhealthyRestartCooldownMs`.
+- **Portas**: o start verifica a porta configurada com bind exclusivo em
+  loopback e tenta identificar o dono via `netstat`. Conflito gera
+  `project.port.conflict`, marca `portInUse` no snapshot e **não** mata o
+  ocupante. A UI mostra um alerta na coluna Porta.
+- **Métricas**: CPU normalizada por núcleo (delta entre amostras) e memória
+  `WorkingSet64` via PowerShell em lote. Intervalo em Configurações
+  (`metricsIntervalMs`, mín. 1 s). A primeira amostra de CPU é `—`.
+  A aba **Métricas** do projeto e os cartões do Dashboard usam os eventos
+  `project.metrics`/`system.metrics`; nada é persistido no SQLite.
+
+## 9. Limitações conhecidas (Fase 6+)
 
 1. **Instalador/assinatura/updater** — `tauri build` gera NSIS, mas assinatura, atualização e desinstalação guiada ficam na Fase 6.
 2. **Sem single-instance do desktop** — abrir o app duas vezes abre duas janelas (o Engine continua único por diretório de dados).
 3. **Sem adoção/limpeza de órfão** — a reconciliação bloqueia o boot e registra o PID; matar um órfão comprovado é ação manual até os Job Objects (Fase 7).
-4. **Sem health check, portas e métricas** — Fase 5; a aba de métricas e os campos de health existem, mas a execução não.
-5. **`shutdownBehavior=keep-running` não suportado** — exigiria logging desacoplado; a API responde `VALIDATION_ERROR`.
-6. **Token em `engine.json`** — protegido apenas pela ACL do perfil do usuário até a Fase 6.
-7. **Stop no Windows é forçado** — janela cooperativa curta (ADR-011).
-8. **Retenção sem limite global de disco** — hoje é por projeto/dias.
+4. **CPU/memória são melhor esforço** — processos protegidos podem retornar `null`; a primeira leitura de CPU não tem delta.
+5. **Dono da porta pode ser desconhecido** — `netstat` pode falhar ou exigir privilégios; o conflito continua sendo reportado.
+6. **`shutdownBehavior=keep-running` não suportado** — exigiria logging desacoplado; a API responde `VALIDATION_ERROR`.
+7. **Token em `engine.json`** — protegido apenas pela ACL do perfil do usuário até a Fase 6.
+8. **Stop no Windows é forçado** — janela cooperativa curta (ADR-011).
+9. **Retenção sem limite global de disco** — hoje é por projeto/dias.
 
-## 9. Dados e privacidade
+## 10. Dados e privacidade
 
 - Banco: `%LOCALAPPDATA%\LocalServerManager\data\manager.sqlite`
 - Logs de processo: `%LOCALAPPDATA%\LocalServerManager\logs\<projectId>\<instanceId>.log`

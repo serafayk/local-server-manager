@@ -7,7 +7,8 @@
 - **Fase 2 — concluída:** recovery com backoff/retry budget/cooldown de estabilidade, reconciliação segura de órfãos no boot, bloqueio de `startOnBoot` com órfão comprovado e retenção de logs.
 - **Fase 3 — concluída:** API HTTP local autenticada, rotas de projetos/lote/logs/eventos/settings, `detect`/`import` de pasta, WebSocket com snapshots, heartbeat e backpressure, protocolo versionado.
 - **Fase 4 — concluída:** UI completa (dashboard, projetos, cadastro em 3 etapas, detalhes, logs ao vivo, eventos, configurações) + shell Tauri 2 com bandeja, close-to-tray e Engine empacotado como recurso.
-- **Próxima:** Fase 5 (health check, portas e métricas) — a UI já reserva a aba e os campos.
+- **Fase 5 — concluída:** health check HTTP/TCP com threshold e restart opcional com cooldown, detecção de conflito de porta (sem matar o ocupante) e métricas de CPU/memória via PowerShell em lote, expostas na UI.
+- **Próxima:** Fase 6 (instalador Windows, autostart, upgrade e backup).
 
 Detalhes de execução, comandos e limitações: [15-DEVELOPMENT.md](15-DEVELOPMENT.md) e `CHANGELOG.md`.
 

@@ -1,8 +1,8 @@
 # 08 — Desktop e experiência do usuário
 
-> **Status (Fase 4a):** telas de Dashboard, Projetos, Detalhes (visão geral/logs/configuração/histórico),
-> Logs, Eventos e Configurações implementadas em `apps/desktop`, com cliente tipado e WebSocket.
-> Tray e shell Tauri ficam para a Fase 4b (ADR-015).
+> **Status (Fase 4–5):** telas de Dashboard, Projetos, Detalhes (visão geral/logs/configuração/histórico/métricas),
+> Logs, Eventos e Configurações implementadas em `apps/desktop`, com cliente tipado, WebSocket,
+> health check, conflito de porta e métricas ao vivo. Tray e shell Tauri na Fase 4b (ADR-015).
 
 ## 1. Direção visual
 

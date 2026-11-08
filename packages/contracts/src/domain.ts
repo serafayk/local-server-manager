@@ -88,6 +88,8 @@ export interface RuntimeSnapshot {
   restartAttempt: number;
   lastExit: ProcessExitInfo | null;
   updatedAt: string;
+  /** Resultado da última checagem de porta no start (null = não verificado). */
+  portInUse?: boolean | null;
 }
 
 export interface LogRecord {

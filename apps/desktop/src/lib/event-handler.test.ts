@@ -84,6 +84,75 @@ describe('applyEngineEvent', () => {
     expect(appendLog).toHaveBeenCalledWith(expect.objectContaining({ text: 'linha', sequence: 1 }));
   });
 
+  it('encaminha métricas e notas de saúde', () => {
+    const queryClient = new QueryClient();
+    const setProjectMetrics = vi.fn();
+    const setSystemMetrics = vi.fn();
+    const setHealthNote = vi.fn();
+    const targets = {
+      queryClient,
+      appendLog: vi.fn(),
+      setProjectMetrics,
+      setSystemMetrics,
+      setHealthNote,
+    };
+
+    applyEngineEvent(
+      {
+        eventId: 'e4',
+        protocolVersion: 1,
+        type: 'project.metrics',
+        timestamp: '2026-01-01T00:00:00.000Z',
+        projectId: 'p1',
+        payload: {
+          projectId: 'p1',
+          pid: 10,
+          cpuPercent: 5,
+          memoryBytes: 1_024,
+          uptimeMs: 1_000,
+        },
+      },
+      targets,
+    );
+    expect(setProjectMetrics).toHaveBeenCalledWith(expect.objectContaining({ pid: 10 }));
+
+    applyEngineEvent(
+      {
+        eventId: 'e5',
+        protocolVersion: 1,
+        type: 'system.metrics',
+        timestamp: '2026-01-01T00:00:00.000Z',
+        payload: {
+          managedProcesses: 1,
+          running: 1,
+          crashed: 0,
+          cpuPercent: 5,
+          memoryBytes: 1_024,
+        },
+      },
+      targets,
+    );
+    expect(setSystemMetrics).toHaveBeenCalled();
+
+    applyEngineEvent(
+      {
+        eventId: 'e6',
+        protocolVersion: 1,
+        type: 'project.health.changed',
+        timestamp: '2026-01-01T00:00:00.000Z',
+        projectId: 'p1',
+        payload: {
+          projectId: 'p1',
+          health: 'UNHEALTHY',
+          previousHealth: 'HEALTHY',
+          detail: 'HTTP 503',
+        },
+      },
+      targets,
+    );
+    expect(setHealthNote).toHaveBeenCalledWith('p1', 'HTTP 503');
+  });
+
   it('invalida caches quando um projeto é criado', () => {
     const queryClient = new QueryClient();
     const spy = vi.spyOn(queryClient, 'invalidateQueries');

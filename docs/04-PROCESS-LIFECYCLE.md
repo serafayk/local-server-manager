@@ -82,7 +82,7 @@ Implementado conforme ADR-013:
 
 ## 6. Health failure
 
-Health check falhar não é igual a processo cair.
+Implementado conforme ADR-016. Health check falhar não é igual a processo cair.
 
 Configurações:
 
@@ -92,7 +92,15 @@ Configurações:
 - `restartOnUnhealthy`;
 - `unhealthyRestartCooldownMs`.
 
-Se `restartOnUnhealthy=true`, registrar `HEALTH_RESTART_REQUESTED` e usar o mesmo mecanismo de restart controlado. Aplicar cooldown para evitar reinícios contínuos por endpoint mal configurado.
+O monitor é independente: `status` continua `RUNNING` mesmo com saúde `UNHEALTHY`
+(a UI mostra `RUNNING · UNHEALTHY`). O primeiro probe bem-sucedido marca
+`HEALTHY`; após `failureThreshold` falhas consecutivas marca `UNHEALTHY` e
+recupera ao primeiro sucesso.
+
+Se `restartOnUnhealthy=true`, o Engine solicita o restart controlado (mesmo
+caminho do recovery) respeitando `unhealthyRestartCooldownMs` entre solicitações.
+O cooldown persiste entre ciclos para impedir loop. Stop/exit param o monitor e
+a saúde volta a `UNKNOWN`.
 
 ## 7. Encerramento no Windows
 

@@ -1,7 +1,7 @@
 import type { ProjectSummary } from '@lsm/contracts';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Play, RotateCw, Square, Trash2 } from 'lucide-react';
+import { AlertTriangle, Play, RotateCw, Square, Trash2 } from 'lucide-react';
 import { formatUptime } from '../lib/format';
 import { HealthBadge, isActiveStatus, StatusBadge, StatusDot } from './status';
 import { Spinner } from './ui';
@@ -138,7 +138,17 @@ export function ProjectTable({
                   {formatUptime(runtime.startedAt)}
                 </td>
                 <td className="mono py-2 pr-3 text-xs text-zinc-400">
-                  {project.config.port ?? '—'}
+                  <span className="inline-flex items-center gap-1">
+                    {project.config.port ?? '—'}
+                    {runtime.portInUse === true ? (
+                      <span title="Porta em uso por outro processo">
+                        <AlertTriangle
+                          className="h-3.5 w-3.5 text-amber-400"
+                          aria-label="Porta em uso"
+                        />
+                      </span>
+                    ) : null}
+                  </span>
                 </td>
                 <td className="py-2 pr-1">
                   <div className="flex items-center justify-end gap-1">

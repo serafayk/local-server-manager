@@ -15,7 +15,13 @@ function record(sequence: number): LogRecord {
 }
 
 beforeEach(() => {
-  useAppStore.setState({ connection: 'idle', logsByProject: {} });
+  useAppStore.setState({
+    connection: 'idle',
+    logsByProject: {},
+    metricsByProject: {},
+    systemMetrics: null,
+    healthNotes: {},
+  });
 });
 
 describe('useAppStore', () => {
@@ -51,5 +57,28 @@ describe('useAppStore', () => {
   it('atualiza o estado da conexão', () => {
     useAppStore.getState().setConnection('open');
     expect(useAppStore.getState().connection).toBe('open');
+  });
+
+  it('guarda métricas e notas de saúde', () => {
+    useAppStore.getState().setProjectMetrics({
+      projectId: 'p1',
+      pid: 100,
+      cpuPercent: 12.5,
+      memoryBytes: 2_048,
+      uptimeMs: 1_000,
+    });
+    useAppStore.getState().setSystemMetrics({
+      managedProcesses: 1,
+      running: 1,
+      crashed: 0,
+      cpuPercent: 12.5,
+      memoryBytes: 2_048,
+    });
+    useAppStore.getState().setHealthNote('p1', 'HTTP 503');
+
+    const state = useAppStore.getState();
+    expect(state.metricsByProject.p1?.cpuPercent).toBe(12.5);
+    expect(state.systemMetrics?.running).toBe(1);
+    expect(state.healthNotes.p1).toBe('HTTP 503');
   });
 });
