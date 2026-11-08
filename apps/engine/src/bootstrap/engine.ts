@@ -1,4 +1,5 @@
 import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   PROTOCOL_VERSION,
   ENGINE_SETTINGS_KEY,
@@ -26,6 +27,9 @@ import { runLogRetention } from '../log-manager/log-retention';
 import { ProcessManager } from '../process-manager/process-manager';
 import { MetricsCollector } from '../metrics/metrics-collector';
 import { applyPendingRestore, BackupManager } from '../backup/backup-manager';
+import { CertificateManager } from '../proxy/certificate-manager';
+import { DomainService } from '../domains/domain-service';
+import { HostsManager } from '../proxy/hosts-file';
 import { ProjectService } from '../supervisor/project-service';
 import { GroupService } from '../supervisor/group-service';
 import { StackService } from '../supervisor/stack-service';
@@ -45,6 +49,10 @@ export interface CreateEngineOptions {
   logger?: Logger;
   /** Desabilita o lock de instância única (somente diagnóstico/testes). */
   singleInstance?: boolean;
+  /** Portas do proxy de domínios (0 = efêmera, para testes). */
+  domainPorts?: { httpPort?: number; httpsPort?: number };
+  /** Arquivo hosts alternativo (testes). */
+  hostsFile?: string;
 }
 
 export interface Engine {
@@ -60,6 +68,7 @@ export interface Engine {
   readonly stacks: StackService;
   readonly projects: ProjectService;
   readonly groups: GroupService;
+  readonly domains: DomainService;
   readonly tunnels: TunnelManager;
   readonly metrics: MetricsCollector;
   readonly backups: BackupManager;
@@ -133,6 +142,20 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     clock,
     logger,
     batchConcurrency: DEFAULT_ENGINE_SETTINGS.batchConcurrency,
+  });
+  const certificates = new CertificateManager({
+    certsDir: join(paths.root, 'certs'),
+    logger,
+  });
+  const hosts = new HostsManager({ logger, filePath: options.hostsFile });
+  const domains = new DomainService({
+    repositories,
+    supervisor,
+    clock,
+    logger,
+    certificates,
+    hosts,
+    ports: options.domainPorts,
   });
   const tunnels = new TunnelManager({
     repositories,
@@ -237,6 +260,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     stacks,
     projects,
     groups,
+    domains,
     tunnels,
     metrics,
     backups,
@@ -288,6 +312,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
           stacks,
           projects,
           groups,
+          domains,
           tunnels,
           repositories,
           logManager,
@@ -346,7 +371,13 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
         metrics.setIntervalMs(engineSettings.metricsIntervalMs);
         metrics.start();
 
-        await stacks.startBootProjects(new Set(reconciliation.blockedProjectIds));
+        await domains.startIfConfigured();
+
+        await stacks
+          .startBootProjects(new Set(reconciliation.blockedProjectIds))
+          .catch((error: unknown) => {
+            logger.warn('Falha ao iniciar projetos de boot', {}, error);
+          });
         await tunnels.startBootTunnels();
       } catch (error) {
         started = false;
@@ -384,6 +415,9 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
         apiServer = null;
         apiInfo = null;
         metrics.stop();
+        await domains.shutdown().catch((error: unknown) => {
+          logger.warn('Falha ao encerrar o proxy de domínios', {}, error);
+        });
         await tunnels.shutdown();
         await supervisor.shutdown();
         await staticHost.stopAll();

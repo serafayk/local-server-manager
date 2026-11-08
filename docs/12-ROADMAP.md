@@ -12,7 +12,8 @@
 - **Fase 10 — concluída:** túneis Cloudflare supervisionados (config.yml, token e quick tunnel), com start/stop, health, logs e URL pública.
 - **Fase 11 — concluída:** execução direta (sem pnpm/cmd/CLI) e hospedagem estática no Engine, com build one-shot.
 - **Fase 12 — concluída:** stacks com `dependsOn`, readiness por health check, cascata de falhas e stop em ordem inversa.
-- **Próxima:** domínios amigáveis locais (proxy embutido), serviços além de Node (Compose/Postgres/Redis), Engine headless, PgBouncer, Named Pipe/Job Objects, assinatura e updater.
+- **Fase 13 — concluída:** domínios locais `.lsm`/`.localhost` com proxy em loopback, HTTPS por CA própria e sincronização de hosts em lote.
+- **Próxima:** serviços além de Node (Compose/Postgres/Redis), Engine headless, PgBouncer, Named Pipe/Job Objects, assinatura e updater.
 
 Detalhes de execução, comandos e limitações: [15-DEVELOPMENT.md](15-DEVELOPMENT.md), [16-USER-GUIDE.md](16-USER-GUIDE.md) e `CHANGELOG.md`.
 

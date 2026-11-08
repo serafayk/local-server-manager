@@ -317,7 +317,22 @@ pnpm --filter @lsm/desktop tauri:build
 - Exportação referencia dependências por nome; importação reconecta após criar
   todos os projetos.
 
-## 16. Limitações conhecidas (Fase 7+)
+## 16. Domínios locais (Fase 13)
+
+- Proxy reverso em `127.0.0.1:8090` (HTTP) e `:8443` (HTTPS), com fallback de
+  porta e preferência persistida; bind apenas em loopback.
+- Tabela `domains` (migração v5): `host` único → projeto + porta opcional.
+- `.lsm` e `.localhost`; o alias `.localhost` de uma rota `.lsm` é servido sem
+  configuração.
+- `Host`/`Origin` são reescritos para `127.0.0.1:<porta>` no upstream; o
+  original fica em `x-forwarded-host`/`x-forwarded-proto`.
+- WebSocket vai por túnel TCP no evento `upgrade` (HMR funciona).
+- Arquivo hosts com bloco gerenciado + sincronização em lote (UAC único).
+- CA local em `CurrentUser\Root` (certutil, sem UAC) e folha por host sob
+  demanda (`certs/` no diretório de dados).
+- Erros 404/502 trazem página com projeto, estado e porta esperada.
+
+## 17. Limitações conhecidas (Fase 7+)
 
 1. **Assinatura e updater automático** — o instalador NSIS é gerado, mas assinatura de código e atualização automática ficam para a Fase 7.
 2. **Sem single-instance do desktop** — abrir o app duas vezes abre duas janelas (o Engine continua único por diretório de dados).
@@ -329,7 +344,7 @@ pnpm --filter @lsm/desktop tauri:build
 8. **Stop no Windows é forçado** — janela cooperativa curta (ADR-011).
 9. **Retenção sem limite global de disco** — hoje é por projeto/dias.
 
-## 17. Dados e privacidade
+## 18. Dados e privacidade
 
 - Banco: `%LOCALAPPDATA%\LocalServerManager\data\manager.sqlite`
 - Logs de processo: `%LOCALAPPDATA%\LocalServerManager\logs\<projectId>\<instanceId>.log`

@@ -1,4 +1,5 @@
 export * from './api';
+export * from './domain';
 export * from './engine-settings';
 export * from './export-config';
 export * from './group';

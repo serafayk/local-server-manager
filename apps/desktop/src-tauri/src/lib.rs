@@ -361,6 +361,26 @@ async fn restart_engine(app: AppHandle) -> Result<EngineApiInfo, String> {
     .map_err(|error| error.to_string())?
 }
 
+/// Abre uma URL no navegador padrão, fora do webview do aplicativo.
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err("Apenas URLs http(s) são suportadas".to_string());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("rundll32.exe")
+            .args(["url.dll,FileProtocolHandler", &url])
+            .spawn()
+            .map_err(|error| format!("Falha ao abrir o navegador: {error}"))?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Abrir navegador é suportado apenas no Windows".to_string())
+    }
+}
+
 fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
@@ -423,7 +443,8 @@ pub fn run() {
             set_autostart,
             restart_engine,
             stop_engine,
-            pick_folder
+            pick_folder,
+            open_url
         ])
         .run(tauri::generate_context!())
         .expect("erro ao executar o Local Server Manager");

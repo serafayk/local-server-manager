@@ -67,6 +67,67 @@ export interface StackRunResult {
   skipped: Array<{ projectId: string; reason: string }>;
 }
 
+/** Rota de domínio local (ex.: `api.uai.lsm`) apontando para um projeto. */
+export interface DomainRoute {
+  id: string;
+  host: string;
+  projectId: string;
+  projectName: string;
+  projectStatus: ProjectStatus;
+  /** Porta fixa da rota; `null` usa a porta do projeto. */
+  port: number | null;
+  /** Porta efetivamente usada pelo proxy (null = projeto sem porta). */
+  upstreamPort: number | null;
+  urls: {
+    http: string;
+    https: string;
+    /** Alias `.localhost` que resolve sem editar o arquivo hosts. */
+    localhost: string;
+  };
+  /** `true` quando o host `.lsm` já está no arquivo hosts. */
+  hostsSynced: boolean;
+}
+
+export interface DomainCertificateStatus {
+  exists: boolean;
+  trusted: boolean;
+  path: string | null;
+}
+
+export interface DomainsStatus {
+  httpPort: number;
+  httpsPort: number;
+  httpListening: boolean;
+  httpsListening: boolean;
+  certificate: DomainCertificateStatus;
+  hostsFile: string;
+  pendingHosts: string[];
+  /** Motivo quando o proxy não pôde subir (porta ocupada, por exemplo). */
+  proxyError: string | null;
+}
+
+export interface DomainsOverview {
+  routes: DomainRoute[];
+  status: DomainsStatus;
+}
+
+export interface CreateDomainRequest {
+  host: string;
+  projectId: string;
+  port?: number | null;
+}
+
+export interface UpdateDomainRequest {
+  host?: string;
+  port?: number | null;
+}
+
+export interface HostsSyncResult {
+  applied: string[];
+  pending: string[];
+  error: string | null;
+}
+
 export interface ProjectSummary {
   config: ProjectConfig;
   runtime: RuntimeSnapshot;

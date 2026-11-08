@@ -2,6 +2,20 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.14.0] — 2026-11-08
+
+### Fase 13 — Domínios locais
+
+- Proxy reverso do Engine em `127.0.0.1:8090` (HTTP) e `:8443` (HTTPS), com fallback automático de porta e preferência persistida.
+- Tabela `domains` (migração v5): host único → projeto, com porta opcional.
+- `.lsm` (arquivo hosts) e `.localhost` (sem configuração); o alias `.localhost` de uma rota `.lsm` já funciona antes do UAC.
+- Bloco gerenciado no arquivo hosts com sincronização em lote (um único prompt de UAC) e remoção de domínios órfãos.
+- CA local no `CurrentUser\Root` e certificado por host sob demanda (SAN com domínio e alias); confiança na CA é ação explícita.
+- Roteamento por `Host` com 404/502 explicativos; `Host`/`Origin` reescritos para `127.0.0.1:<porta>`, original em `x-forwarded-*`.
+- WebSocket/HMR encaminhados por upgrade TCP.
+- Página **Domínios** com URLs (HTTP/HTTPS/.localhost), copiar/abrir, status do proxy/CA/hosts e CRUD.
+- Comando `open_url` no shell (abre o navegador padrão) e 22 novos testes; total de 332.
+
 ## [0.13.0] — 2026-11-08
 
 ### Fase 12 — Stacks com dependências

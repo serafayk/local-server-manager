@@ -2,6 +2,24 @@
 
 Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicionadas no topo com data, contexto, decisão, alternativas e consequências.
 
+## ADR-024 - Domínios locais com proxy e CA própria
+
+**Status:** Aceita (Fase 13)
+
+**Contexto:** cada projeto tem uma porta (3001, 5174, 8080…) difícil de memorizar, e testes de OAuth/cookies exigem `https`. Editar `hosts` a cada domínio exige UAC e é manual; usar a porta 80 conflita com IIS, Skype e BranchCache.
+
+**Decisão:**
+
+1. **Proxy reverso no Engine** em `127.0.0.1:8090` (HTTP) e `127.0.0.1:8443` (HTTPS), com fallback automático de porta e persistência da escolha. Bind exclusivo em loopback.
+2. **Roteamento por `Host`** a partir da tabela `domains` (`host` único → projeto/porta opcional). Domínio não cadastrado recebe 404; projeto parado recebe 502 explicativo; projeto sem porta recebe 502 com orientação.
+3. **Dois sufixos:** `.lsm` (bonito, exige arquivo hosts) e `.localhost` (resolve em qualquer navegador sem configuração). O alias `.localhost` de uma rota `.lsm` é servido automaticamente, então o link funciona antes do UAC.
+4. **Arquivo hosts gerenciado** por um bloco delimitado; a sincronização é em lote e usa um único prompt de UAC (`Start-Process -Verb RunAs`), nunca edição manual.
+5. **CA local no CurrentUser\Root** (sem UAC) e folha por host emitida sob demanda, com SAN do domínio e do alias. Confiar na CA é ação explícita do usuário; o Engine não altera a cadeia de confiança sozinho.
+6. **Reescrita de `Host`/`Origin`** para `127.0.0.1:<porta>` no upstream, preservando o original em `x-forwarded-host`/`x-forwarded-proto`. Isso evita o bloqueio de `allowedHosts` do Vite e mantém validações CSRF coerentes.
+7. **WebSocket** é encaminhado por túnel TCP no evento `upgrade`, preservando HMR do Vite e do Next.
+
+**Consequências:** URLs memoráveis e HTTPS confiável sem tocar em `:80`. Apps que montam URLs absolutas a partir de `Host` verão `127.0.0.1:<porta>` (funcional, mas troca de host); `x-forwarded-*` está disponível. O proxy é local: expor publicamente continua sendo papel dos túneis.
+
 ## ADR-023 - Stacks com dependências entre projetos
 
 **Status:** Aceita (Fase 12)

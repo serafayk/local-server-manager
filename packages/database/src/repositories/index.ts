@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { SqliteDomainRepository } from './domain-repository';
 import { SqliteEventRepository } from './event-repository';
 import { SqliteGroupRepository } from './group-repository';
 import { SqliteInstanceRepository } from './instance-repository';
@@ -13,6 +14,7 @@ export interface Repositories {
   events: SqliteEventRepository;
   settings: SqliteSettingsRepository;
   tunnels: SqliteTunnelRepository;
+  domains: SqliteDomainRepository;
 }
 
 export function createRepositories(db: DatabaseSync): Repositories {
@@ -23,9 +25,11 @@ export function createRepositories(db: DatabaseSync): Repositories {
     events: new SqliteEventRepository(db),
     settings: new SqliteSettingsRepository(db),
     tunnels: new SqliteTunnelRepository(db),
+    domains: new SqliteDomainRepository(db),
   };
 }
 
+export * from './domain-repository';
 export * from './event-repository';
 export * from './group-repository';
 export * from './instance-repository';

@@ -63,6 +63,13 @@ gerado pelo Engine. Não retornar stack trace; o stack completo fica no log inte
 | POST   | `/api/v1/groups/:id/start`            | Subir stack na ordem topológica                         |
 | POST   | `/api/v1/groups/:id/stop`             | Parar dependentes antes das dependências                |
 | POST   | `/api/v1/groups/:id/restart`          | Reiniciar a stack                                       |
+| GET    | `/api/v1/domains`                     | Rotas + status do proxy/CA/hosts                        |
+| POST   | `/api/v1/domains`                     | Criar rota (`host`, `projectId`, `port?`)               |
+| PUT    | `/api/v1/domains/:id`                 | Alterar host/porta                                      |
+| DELETE | `/api/v1/domains/:id`                 | Remover rota                                            |
+| POST   | `/api/v1/domains/hosts/sync`          | Gravar bloco no hosts (UAC, em lote)                    |
+| POST   | `/api/v1/domains/ca/trust`            | Confiar na CA local (CurrentUser)                       |
+| GET    | `/api/v1/domains/ca`                  | Certificado da CA em PEM                                |
 | GET    | `/api/v1/system/node-versions`        | Instalações de Node detectadas                          |
 | GET    | `/api/v1/tunnels`                     | Lista túneis Cloudflare                                 |
 | POST   | `/api/v1/tunnels`                     | Cria túnel (config/token/quick)                         |

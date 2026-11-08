@@ -169,9 +169,27 @@ ALTER TABLE projects ADD COLUMN dependency_timeout_ms INTEGER NOT NULL DEFAULT 6
 `,
 };
 
+export const MIGRATION_005: Migration = {
+  version: 5,
+  name: 'local-domains',
+  sql: `
+CREATE TABLE domains (
+  id TEXT PRIMARY KEY,
+  host TEXT NOT NULL COLLATE NOCASE UNIQUE,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  port INTEGER CHECK (port IS NULL OR (port BETWEEN 1 AND 65535)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX idx_domains_project ON domains (project_id);
+`,
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   MIGRATION_001,
   MIGRATION_002,
   MIGRATION_003,
   MIGRATION_004,
+  MIGRATION_005,
 ];

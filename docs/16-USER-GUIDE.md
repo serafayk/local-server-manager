@@ -129,6 +129,30 @@ junto.
 Remover um projeto que é dependência de outro mostra quais serão desvinculados;
 confirme com **Remover e desvincular**.
 
+### Domínios locais
+
+A página **Domínios** dá um endereço fixo a cada projeto:
+
+- `api.uai.lsm` — nome bonito. Precisa de uma linha no arquivo hosts; o botão
+  **Sincronizar hosts** faz isso em lote com um único pedido de administrador.
+- `app.uai.localhost` — funciona imediatamente, sem configuração. É o alias
+  automático de um domínio `.lsm` (ou use `.localhost` direto no cadastro).
+
+O proxy escuta apenas em `127.0.0.1`, em HTTP na porta 8090 e HTTPS na 8443
+(se ocupadas, ele usa a próxima livre e lembra a escolha). Um domínio aponta
+para a porta do projeto ou para uma porta específica da rota.
+
+**HTTPS:** clique em **Confiar na CA** uma vez. A CA é criada localmente e
+instalada no seu usuário (sem UAC); depois disso `https://api.uai.lsm:8443`
+abre sem aviso. Reinicie o navegador se ele já estava aberto.
+
+Se o projeto estiver parado, o domínio responde com uma página explicando o
+motivo e a porta esperada. WebSocket/HMR passam pelo proxy normalmente.
+
+> O proxy reescreve `Host`/`Origin` para `127.0.0.1:<porta>` no projeto (para
+> não esbarrar em bloqueios de host do Vite). O host original vai em
+> `x-forwarded-host`.
+
 ### Perfil de memória
 
 Em **Execução → Perfil de memória** você aplica `NODE_OPTIONS` ao projeto

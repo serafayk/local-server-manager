@@ -3,6 +3,7 @@ export const queryKeys = {
   groups: ['groups'] as const,
   nodeVersions: ['node-versions'] as const,
   tunnels: ['tunnels'] as const,
+  domains: ['domains'] as const,
   project: (id: string) => ['project', id] as const,
   logs: (id: string, instanceId: string | null, tail: number) =>
     ['logs', id, instanceId ?? 'latest', tail] as const,

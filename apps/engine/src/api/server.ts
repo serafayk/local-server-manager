@@ -36,6 +36,7 @@ import type { ProjectService } from '../supervisor/project-service';
 import type { GroupService } from '../supervisor/group-service';
 import type { StackService } from '../supervisor/stack-service';
 import type { Supervisor } from '../supervisor/supervisor';
+import type { DomainService } from '../domains/domain-service';
 import type { TunnelManager } from '../tunnels/tunnel-manager';
 import { extractBearerToken, extractQueryToken, tokensMatch } from './auth';
 import {
@@ -56,6 +57,7 @@ export interface ApiServerOptions {
   stacks: StackService;
   projects: ProjectService;
   groups: GroupService;
+  domains: DomainService;
   tunnels: TunnelManager;
   repositories: Repositories;
   logManager: LogManager;
@@ -267,6 +269,45 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
 
     instance.delete('/api/v1/groups/:id', async (request, reply) => {
       return sendSuccess(reply, options.groups.delete(projectIdOf(request)), requestIdOf(request));
+    });
+
+    instance.get('/api/v1/domains', async (request, reply) => {
+      return sendSuccess(reply, await options.domains.overview(), requestIdOf(request));
+    });
+
+    instance.post('/api/v1/domains', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        await options.domains.create(request.body),
+        requestIdOf(request),
+        201,
+      );
+    });
+
+    instance.post('/api/v1/domains/hosts/sync', async (_request, reply) => {
+      return sendSuccess(reply, await options.domains.syncHosts(), requestIdOf(_request));
+    });
+
+    instance.post('/api/v1/domains/ca/trust', async (request, reply) => {
+      await options.domains.trustCa();
+      return sendSuccess(reply, await options.domains.status(), requestIdOf(request));
+    });
+
+    instance.get('/api/v1/domains/ca', async (_request, reply) => {
+      reply.type('application/x-pem-file');
+      return options.domains.caPem();
+    });
+
+    instance.put('/api/v1/domains/:id', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        await options.domains.update(projectIdOf(request), request.body),
+        requestIdOf(request),
+      );
+    });
+
+    instance.delete('/api/v1/domains/:id', async (request, reply) => {
+      return sendSuccess(reply, options.domains.delete(projectIdOf(request)), requestIdOf(request));
     });
 
     instance.get('/api/v1/tunnels', async (request, reply) => {

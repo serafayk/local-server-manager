@@ -3,6 +3,7 @@ import { HashRouter, Route, Routes } from 'react-router-dom';
 import { AppLayout } from './components/layout';
 import { EngineProvider } from './providers/engine-provider';
 import { DashboardPage } from './pages/DashboardPage';
+import { DomainsPage } from './pages/DomainsPage';
 import { EventsPage } from './pages/EventsPage';
 import { GroupsPage } from './pages/GroupsPage';
 import { TunnelsPage } from './pages/TunnelsPage';
@@ -33,6 +34,7 @@ export default function App() {
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="projects/:id" element={<ProjectDetailPage />} />
               <Route path="groups" element={<GroupsPage />} />
+              <Route path="domains" element={<DomainsPage />} />
               <Route path="tunnels" element={<TunnelsPage />} />
               <Route path="logs" element={<LogsPage />} />
               <Route path="events" element={<EventsPage />} />

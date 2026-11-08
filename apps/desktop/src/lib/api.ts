@@ -4,10 +4,14 @@ import type {
   CreateGroupRequest,
   DetectProjectResponse,
   DomainEvent,
+  DomainRoute,
+  DomainsOverview,
+  DomainsStatus,
   EngineInfo,
   EngineSettings,
   ErrorCode,
   ExportBundle,
+  HostsSyncResult,
   ImportConfigResponse,
   LaunchPreview,
   LogRecord,
@@ -259,6 +263,34 @@ export class EngineClient {
 
   restartGroup(id: string): Promise<BulkResponse> {
     return this.request('POST', `/groups/${encodeURIComponent(id)}/restart`);
+  }
+
+  getDomains(): Promise<DomainsOverview> {
+    return this.request('GET', '/domains');
+  }
+
+  createDomain(body: {
+    host: string;
+    projectId: string;
+    port?: number | null;
+  }): Promise<DomainRoute> {
+    return this.request('POST', '/domains', body);
+  }
+
+  updateDomain(id: string, body: { host?: string; port?: number | null }): Promise<DomainRoute> {
+    return this.request('PUT', `/domains/${encodeURIComponent(id)}`, body);
+  }
+
+  deleteDomain(id: string): Promise<{ id: string; host: string }> {
+    return this.request('DELETE', `/domains/${encodeURIComponent(id)}`);
+  }
+
+  syncDomainHosts(): Promise<HostsSyncResult> {
+    return this.request('POST', '/domains/hosts/sync', {});
+  }
+
+  trustDomainCa(): Promise<DomainsStatus> {
+    return this.request('POST', '/domains/ca/trust', {});
   }
 
   exportProjects(): Promise<ExportBundle> {
