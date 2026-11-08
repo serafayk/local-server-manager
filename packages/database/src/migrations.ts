@@ -159,4 +159,19 @@ ALTER TABLE projects ADD COLUMN output_dir TEXT;
 `,
 };
 
-export const MIGRATIONS: readonly Migration[] = [MIGRATION_001, MIGRATION_002, MIGRATION_003];
+export const MIGRATION_004: Migration = {
+  version: 4,
+  name: 'project-dependencies',
+  sql: `
+ALTER TABLE projects ADD COLUMN depends_on_json TEXT NOT NULL DEFAULT '[]';
+
+ALTER TABLE projects ADD COLUMN dependency_timeout_ms INTEGER NOT NULL DEFAULT 60000;
+`,
+};
+
+export const MIGRATIONS: readonly Migration[] = [
+  MIGRATION_001,
+  MIGRATION_002,
+  MIGRATION_003,
+  MIGRATION_004,
+];

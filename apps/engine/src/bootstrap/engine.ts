@@ -28,6 +28,7 @@ import { MetricsCollector } from '../metrics/metrics-collector';
 import { applyPendingRestore, BackupManager } from '../backup/backup-manager';
 import { ProjectService } from '../supervisor/project-service';
 import { GroupService } from '../supervisor/group-service';
+import { StackService } from '../supervisor/stack-service';
 import { Supervisor } from '../supervisor/supervisor';
 import { StaticHostManager } from '../static/static-host';
 import { TunnelManager } from '../tunnels/tunnel-manager';
@@ -56,6 +57,7 @@ export interface Engine {
   readonly logManager: LogManager;
   readonly processManager: ProcessManager;
   readonly supervisor: Supervisor;
+  readonly stacks: StackService;
   readonly projects: ProjectService;
   readonly groups: GroupService;
   readonly tunnels: TunnelManager;
@@ -125,6 +127,13 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     batchConcurrency: DEFAULT_ENGINE_SETTINGS.batchConcurrency,
   });
   const groups = new GroupService({ repositories, clock, logger });
+  const stacks = new StackService({
+    repositories,
+    supervisor,
+    clock,
+    logger,
+    batchConcurrency: DEFAULT_ENGINE_SETTINGS.batchConcurrency,
+  });
   const tunnels = new TunnelManager({
     repositories,
     logManager,
@@ -225,6 +234,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     logManager,
     processManager,
     supervisor,
+    stacks,
     projects,
     groups,
     tunnels,
@@ -263,6 +273,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
           }
         }
         supervisor.setBatchConcurrency(engineSettings.batchConcurrency);
+        stacks.setBatchConcurrency(engineSettings.batchConcurrency);
 
         for (const config of repositories.projects.list()) {
           supervisor.registerProject(config);
@@ -274,6 +285,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
         apiServer = createApiServer({
           token: generateApiToken(),
           supervisor,
+          stacks,
           projects,
           groups,
           tunnels,
@@ -297,6 +309,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
             repositories.settings.set(ENGINE_SETTINGS_KEY, merged);
             engineSettings = merged;
             supervisor.setBatchConcurrency(merged.batchConcurrency);
+            stacks.setBatchConcurrency(merged.batchConcurrency);
             metrics.setIntervalMs(merged.metricsIntervalMs);
             logger.info('Configuração do Engine atualizada', { ...merged });
             return merged;
@@ -333,7 +346,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
         metrics.setIntervalMs(engineSettings.metricsIntervalMs);
         metrics.start();
 
-        await supervisor.startBootProjects(new Set(reconciliation.blockedProjectIds));
+        await stacks.startBootProjects(new Set(reconciliation.blockedProjectIds));
         await tunnels.startBootTunnels();
       } catch (error) {
         started = false;

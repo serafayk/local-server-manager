@@ -2,6 +2,20 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.13.0] — 2026-11-08
+
+### Fase 12 — Stacks com dependências
+
+- `dependsOn` (`{ projectId, waitFor }`) e `dependencyTimeoutMs` por projeto; migração v4 (`depends_on_json`, `dependency_timeout_ms`).
+- `waitFor`: `ready` aguarda health check saudável (ou processo iniciado quando não há health check); `started` aguarda o processo.
+- `StackService` resolve dependências transitivas e sobe em níveis topológicos, em paralelo dentro do nível.
+- Start individual e `bulk/start` sobem a cadeia necessária; stop de grupo acontece na ordem inversa e não derruba dependências externas.
+- Falha de dependência propaga `DEPENDENCY_FAILED` sem iniciar o dependente.
+- Ciclos, auto-dependência e referências inexistentes são rejeitados; remover projeto com dependentes exige `force` e desvincula automaticamente.
+- Exportação referencia dependências por nome; importação reconecta em segunda passada.
+- UI: seleção de dependências com critério e timeout no cadastro, botões Subir stack/Parar/Reiniciar em Grupos e vínculos no detalhe do projeto.
+- 12 novos testes; total de 310.
+
 ## [0.12.0] — 2026-11-08
 
 ### Fase 11 — Execução direta e hospedagem estática

@@ -2,7 +2,25 @@
 
 Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicionadas no topo com data, contexto, decisão, alternativas e consequências.
 
-## ADR-022 — Execução direta e hospedagem estática no Engine
+## ADR-023 - Stacks com dependências entre projetos
+
+**Status:** Aceita (Fase 12)
+
+**Contexto:** o LSM já tinha grupos e `startupOrder`, mas "iniciar grupo" era um start em lote sem ordem real: nada impedia subir a API antes do banco, e uma falha em uma dependência deixava o restante subindo contra um serviço ausente.
+
+**Decisão:**
+
+1. **`dependsOn: { projectId, waitFor }[]`** por projeto. `waitFor` é `started` (processo iniciado) ou `ready` (health check saudável; se o health check estiver desabilitado, cai para `started`).
+2. **`dependencyTimeoutMs`** (padrão 60s) limita a espera por dependência e evita stack travada.
+3. **`StackService`** resolve dependências transitivas, ordena em **níveis topológicos** e sobe cada nível em paralelo (respeitando o `batchConcurrency`).
+4. **Propagação de falha:** dependentes de um projeto que falhou não são iniciados e recebem `DEPENDENCY_FAILED`, em vez de entrar em retry.
+5. **Stop em ordem inversa** e restrito ao conjunto pedido: parar um grupo não derruba dependências externas compartilhadas.
+6. **Ciclos e referências inexistentes** são rejeitados na escrita (`DEPENDENCY_CYCLE`/`DEPENDENCY_MISSING`); remover projeto com dependentes exige `force` e desvincula as referências.
+7. **Exportação usa nomes**, não IDs, e a importação reconecta em segunda passada — IDs não são portáveis entre máquinas.
+
+**Consequências:** `POST /projects/:id/start`, `bulk/start` e os grupos passam a subir a cadeia necessária. O Engine fica mais próximo de um orquestrador de ambiente local, sem introduzir DSL: a dependência é declarativa e validada. `tsx watch` e o restante do ciclo de vida continuam no Supervisor.
+
+## ADR-022 - Execução direta e hospedagem estática no Engine
 
 **Status:** Aceita (Fase 11)
 

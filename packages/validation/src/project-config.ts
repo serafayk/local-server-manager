@@ -5,6 +5,7 @@ import type {
   LoggingConfig,
   PortSource,
   ProjectConfig,
+  ProjectDependency,
   RestartPolicy,
   RuntimeConfig,
   ServeMode,
@@ -12,6 +13,7 @@ import type {
 } from '@lsm/contracts';
 import {
   CURRENT_CONFIG_SCHEMA_VERSION,
+  DEPENDENCY_WAITS,
   LAUNCH_MODES,
   PORT_SOURCES,
   SERVE_MODES,
@@ -112,6 +114,13 @@ export const environmentSchema = z
 export const portSchema = z.number().int().min(1).max(65_535).nullable().default(null);
 
 export const portSourceSchema = z.enum(PORT_SOURCES).default('none');
+
+export const projectDependencySchema = z.strictObject({
+  projectId: z.string().trim().min(1).max(64),
+  waitFor: z.enum(DEPENDENCY_WAITS).default('ready'),
+});
+
+export const dependencyTimeoutSchema = z.number().int().min(1_000).max(600_000).default(60_000);
 
 export const restartPolicySchema = z
   .strictObject({
@@ -216,6 +225,8 @@ export const createProjectRequestSchema = z
     serveMode: z.enum(SERVE_MODES).default('process'),
     outputDir: z.string().trim().max(1_024).nullable().optional(),
     environment: environmentSchema,
+    dependsOn: z.array(projectDependencySchema).max(32).default([]),
+    dependencyTimeoutMs: dependencyTimeoutSchema,
     port: portSchema,
     portSource: portSourceSchema,
     enabled: z.boolean().default(true),
@@ -234,6 +245,17 @@ export const createProjectRequestSchema = z
         message: 'port é obrigatório quando portSource é "fixed"',
       });
     }
+    const seen = new Set<string>();
+    value.dependsOn.forEach((dependency, index) => {
+      if (seen.has(dependency.projectId)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['dependsOn', index, 'projectId'],
+          message: `dependência duplicada: ${dependency.projectId}`,
+        });
+      }
+      seen.add(dependency.projectId);
+    });
   });
 
 export type ParsedCreateProjectRequest = z.output<typeof createProjectRequestSchema>;
@@ -255,6 +277,8 @@ export interface NormalizedProjectFields {
   serveMode: ServeMode;
   outputDir: string | null;
   environment: Record<string, string>;
+  dependsOn: ProjectDependency[];
+  dependencyTimeoutMs: number;
   port: number | null;
   portSource: PortSource;
   enabled: boolean;
@@ -280,6 +304,8 @@ function normalizeFields(parsed: ParsedCreateProjectRequest): NormalizedProjectF
     serveMode: parsed.serveMode,
     outputDir: parsed.outputDir ?? null,
     environment: { ...parsed.environment },
+    dependsOn: parsed.dependsOn.map((dependency) => ({ ...dependency })),
+    dependencyTimeoutMs: parsed.dependencyTimeoutMs,
     port: parsed.port,
     portSource,
     enabled: parsed.enabled,
@@ -326,6 +352,9 @@ export const updateProjectRequestSchema = z.strictObject({
   serveMode: z.enum(SERVE_MODES).optional(),
   outputDir: z.string().trim().max(1_024).nullable().optional(),
   environment: z.record(z.string(), z.string().max(8_192)).optional(),
+  dependsOn: z.array(projectDependencySchema).max(32).optional(),
+  // Sem `.default()` aqui: no PUT, ausência do campo significa "não alterar".
+  dependencyTimeoutMs: z.number().int().min(1_000).max(600_000).optional(),
   port: z.number().int().min(1).max(65_535).nullable().optional(),
   portSource: z.enum(PORT_SOURCES).optional(),
   enabled: z.boolean().optional(),
@@ -356,6 +385,10 @@ export function parseUpdateProjectRequest(
   if (patch.serveMode !== undefined) merged.serveMode = patch.serveMode;
   if (patch.outputDir !== undefined) merged.outputDir = patch.outputDir;
   if (patch.environment !== undefined) merged.environment = patch.environment;
+  if (patch.dependsOn !== undefined) merged.dependsOn = patch.dependsOn;
+  if (patch.dependencyTimeoutMs !== undefined) {
+    merged.dependencyTimeoutMs = patch.dependencyTimeoutMs;
+  }
   if (patch.port !== undefined) merged.port = patch.port;
   if (patch.portSource !== undefined) merged.portSource = patch.portSource;
   if (patch.enabled !== undefined) merged.enabled = patch.enabled;

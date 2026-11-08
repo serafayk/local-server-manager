@@ -1,4 +1,5 @@
 import type {
+  DependencyWait,
   HealthCheckConfig,
   LaunchMode,
   LoggingConfig,
@@ -57,6 +58,15 @@ export interface BulkProjectsResponse {
   results: BulkProjectResult[];
 }
 
+/** Resultado de subir/parar uma stack (grupo + dependências). */
+export interface StackRunResult {
+  /** Níveis de execução na ordem aplicada (paralelo dentro do nível). */
+  levels: string[][];
+  results: BulkProjectResult[];
+  /** Projetos não executados porque uma dependência falhou. */
+  skipped: Array<{ projectId: string; reason: string }>;
+}
+
 export interface ProjectSummary {
   config: ProjectConfig;
   runtime: RuntimeSnapshot;
@@ -87,6 +97,11 @@ export interface UpdateGroupRequest {
   sortOrder?: number;
 }
 
+export interface ExportedDependency {
+  project: string;
+  waitFor: DependencyWait;
+}
+
 export interface ExportedProject {
   name: string;
   description: string | null;
@@ -100,6 +115,9 @@ export interface ExportedProject {
   launchMode: LaunchMode;
   serveMode: ServeMode;
   outputDir: string | null;
+  /** Referências por **nome** de projeto (IDs não são portáveis entre máquinas). */
+  dependsOn: ExportedDependency[];
+  dependencyTimeoutMs: number;
   enabled: boolean;
   startOnBoot: boolean;
   startupOrder: number;

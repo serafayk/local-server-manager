@@ -8,6 +8,7 @@ import type {
   LaunchPreview,
   LogRecord,
   ProjectConfig,
+  ProjectDependency,
   ProjectSummary,
 } from '@lsm/contracts';
 import { CURRENT_CONFIG_SCHEMA_VERSION } from '@lsm/contracts';
@@ -26,6 +27,7 @@ import type { ProcessManager } from '../process-manager/process-manager';
 import type { ManagedProcess } from '../process-manager/spawn-adapter';
 import type { GroupService } from './group-service';
 import { isActiveStatus } from './project-runtime';
+import { orderByDependencies } from './stack-service';
 import type { Supervisor } from './supervisor';
 
 const SENSITIVE_ENV_KEY =
@@ -72,6 +74,7 @@ export class ProjectService {
       updatedAt: now,
     };
 
+    this.assertDependencies(config);
     this.deps.repositories.projects.create(config);
     try {
       this.deps.supervisor.registerProject(config);
@@ -119,6 +122,7 @@ export class ProjectService {
       throw new AppError('GROUP_NOT_FOUND', `Grupo não encontrado: ${config.groupId}`);
     }
 
+    this.assertDependencies(config);
     this.deps.repositories.projects.update(config);
     this.deps.supervisor.registerProject(config);
 
@@ -139,7 +143,10 @@ export class ProjectService {
     return config;
   }
 
-  deleteProject(projectIdOrName: string): { id: string; name: string } {
+  deleteProject(
+    projectIdOrName: string,
+    options: { force?: boolean } = {},
+  ): { id: string; name: string } {
     const config = this.getProject(projectIdOrName);
     const snapshot = this.deps.supervisor.getSnapshotById(config.id);
     if (snapshot && isActiveStatus(snapshot.status)) {
@@ -149,11 +156,35 @@ export class ProjectService {
       );
     }
 
-    const removed = this.deps.repositories.projects.delete(config.id);
-    if (!removed) {
-      throw new AppError('PROJECT_NOT_FOUND', `Projeto não encontrado: ${config.id}`);
+    const dependents = this.deps.repositories.projects
+      .list()
+      .filter(
+        (project) =>
+          project.id !== config.id &&
+          project.dependsOn.some((dependency) => dependency.projectId === config.id),
+      );
+    if (dependents.length > 0 && options.force !== true) {
+      throw new AppError(
+        'PROJECT_HAS_DEPENDENTS',
+        `"${config.name}" é dependência de ${dependents
+          .map((project) => `"${project.name}"`)
+          .join(', ')}. Remova com force para desvincular.`,
+      );
     }
+
+    this.deps.repositories.projects.delete(config.id);
     this.deps.supervisor.unregisterProject(config.id);
+
+    // Remove referências pendentes para não deixar dependências órfãs.
+    for (const dependent of dependents) {
+      const updated: ProjectConfig = {
+        ...dependent,
+        dependsOn: dependent.dependsOn.filter((dependency) => dependency.projectId !== config.id),
+        updatedAt: this.deps.clock.nowIso(),
+      };
+      this.deps.repositories.projects.update(updated);
+      this.deps.supervisor.registerProject(updated);
+    }
 
     this.deps.repositories.events.append({
       projectId: config.id,
@@ -161,7 +192,11 @@ export class ProjectService {
       level: 'warn',
       eventType: 'project.deleted',
       message: `projeto "${config.name}" removido do cadastro`,
-      metadata: { projectId: config.id, name: config.name },
+      metadata: {
+        projectId: config.id,
+        name: config.name,
+        unlinkedDependents: dependents.map((project) => project.name),
+      },
     });
     this.deps.events.emit(
       'project.deleted',
@@ -170,6 +205,38 @@ export class ProjectService {
     );
     this.deps.logger.info('Projeto removido', { projectId: config.id, name: config.name });
     return { id: config.id, name: config.name };
+  }
+
+  /** Dependência inexistente, auto-dependência ou ciclo são erros de configuração. */
+  private assertDependencies(candidate: ProjectConfig): void {
+    const byId = new Map(
+      this.deps.repositories.projects.list().map((project) => [project.id, project]),
+    );
+    byId.set(candidate.id, candidate);
+
+    for (const dependency of candidate.dependsOn) {
+      if (dependency.projectId === candidate.id) {
+        throw new AppError(
+          'DEPENDENCY_CYCLE',
+          `"${candidate.name}" não pode depender de si mesmo.`,
+        );
+      }
+      if (!byId.has(dependency.projectId)) {
+        throw new AppError(
+          'DEPENDENCY_MISSING',
+          `Dependência não encontrada: ${dependency.projectId}. Cadastre o projeto antes de referenciá-lo.`,
+        );
+      }
+    }
+
+    orderByDependencies(
+      [...byId.values()].map((project) => ({
+        id: project.id,
+        name: project.name,
+        startupOrder: project.startupOrder,
+        dependsOn: project.dependsOn,
+      })),
+    );
   }
 
   getProject(projectIdOrName: string): ProjectConfig {
@@ -277,8 +344,10 @@ export class ProjectService {
     const groupNames = new Map(
       this.deps.repositories.groups.list().map((group) => [group.id, group.name]),
     );
+    const allProjects = this.deps.repositories.projects.list();
+    const projectNames = new Map(allProjects.map((project) => [project.id, project.name]));
 
-    const projects: ExportedProject[] = this.deps.repositories.projects.list().map((config) => {
+    const projects: ExportedProject[] = allProjects.map((config) => {
       const environment: Record<string, string> = {};
       const maskedEnvironmentKeys: string[] = [];
       for (const [key, value] of Object.entries(config.environment)) {
@@ -302,6 +371,11 @@ export class ProjectService {
         launchMode: config.launchMode,
         serveMode: config.serveMode,
         outputDir: config.outputDir,
+        dependsOn: config.dependsOn.flatMap((dependency) => {
+          const name = projectNames.get(dependency.projectId);
+          return name ? [{ project: name, waitFor: dependency.waitFor }] : [];
+        }),
+        dependencyTimeoutMs: config.dependencyTimeoutMs,
         enabled: config.enabled,
         startOnBoot: config.startOnBoot,
         startupOrder: config.startupOrder,
@@ -323,17 +397,21 @@ export class ProjectService {
   importConfiguration(input: unknown): ImportConfigResponse {
     const bundle = parseExportBundle(input);
     const results: ImportConfigResult[] = [];
+    const created = new Map<string, string>();
 
     for (const item of bundle.projects) {
       try {
         const groupId = item.group ? this.deps.groups.ensureByName(item.group).id : null;
-        this.createProject({
+        const config = this.createProject({
           name: item.name,
           description: item.description ?? null,
           groupId,
           workingDirectory: item.workingDirectory,
           runtime: item.runtime,
           environment: item.environment ?? {},
+          // Dependências são vinculadas depois que todos existirem (referências por nome).
+          dependsOn: [],
+          dependencyTimeoutMs: item.dependencyTimeoutMs ?? 60_000,
           port: item.port ?? null,
           portSource:
             item.portSource ?? (item.port !== null && item.port !== undefined ? 'fixed' : 'none'),
@@ -348,6 +426,7 @@ export class ProjectService {
           ...(item.logging !== undefined ? { logging: item.logging } : {}),
           ...(item.shutdown !== undefined ? { shutdown: item.shutdown } : {}),
         });
+        created.set(item.name, config.id);
         results.push({ name: item.name, success: true });
       } catch (error) {
         results.push(
@@ -365,6 +444,46 @@ export class ProjectService {
                 message: error instanceof Error ? error.message : String(error),
               },
         );
+      }
+    }
+
+    // Segunda passada: resolve dependências por nome (IDs não são portáveis).
+    for (const item of bundle.projects) {
+      if (!item.dependsOn || item.dependsOn.length === 0) {
+        continue;
+      }
+      const projectId = created.get(item.name);
+      const result = results.find((entry) => entry.name === item.name && entry.success);
+      if (!projectId || !result) {
+        continue;
+      }
+
+      const resolved: ProjectDependency[] = [];
+      const missing: string[] = [];
+      for (const dependency of item.dependsOn) {
+        const targetId =
+          created.get(dependency.project) ??
+          this.deps.repositories.projects.findByName(dependency.project)?.id;
+        if (!targetId) {
+          missing.push(dependency.project);
+          continue;
+        }
+        resolved.push({ projectId: targetId, waitFor: dependency.waitFor });
+      }
+
+      try {
+        if (resolved.length > 0) {
+          this.updateProject(projectId, { dependsOn: resolved });
+        }
+      } catch (error) {
+        result.success = false;
+        result.errorCode = isAppError(error) ? error.code : 'INTERNAL_ERROR';
+        result.message = error instanceof Error ? error.message : String(error);
+        continue;
+      }
+
+      if (missing.length > 0) {
+        result.message = `dependências ignoradas (não encontradas): ${missing.join(', ')}`;
       }
     }
 

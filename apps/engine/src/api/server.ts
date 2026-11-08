@@ -34,6 +34,7 @@ import type { MetricsCollector } from '../metrics/metrics-collector';
 import { checkPort } from '../ports/port-checker';
 import type { ProjectService } from '../supervisor/project-service';
 import type { GroupService } from '../supervisor/group-service';
+import type { StackService } from '../supervisor/stack-service';
 import type { Supervisor } from '../supervisor/supervisor';
 import type { TunnelManager } from '../tunnels/tunnel-manager';
 import { extractBearerToken, extractQueryToken, tokensMatch } from './auth';
@@ -52,6 +53,7 @@ const MAX_BODY_BYTES = 1_048_576;
 export interface ApiServerOptions {
   token: string;
   supervisor: Supervisor;
+  stacks: StackService;
   projects: ProjectService;
   groups: GroupService;
   tunnels: TunnelManager;
@@ -239,6 +241,30 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
       );
     });
 
+    instance.post('/api/v1/groups/:id/start', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        await options.stacks.startGroup(projectIdOf(request), 'USER'),
+        requestIdOf(request),
+      );
+    });
+
+    instance.post('/api/v1/groups/:id/stop', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        await options.stacks.stopGroup(projectIdOf(request)),
+        requestIdOf(request),
+      );
+    });
+
+    instance.post('/api/v1/groups/:id/restart', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        await options.stacks.restartGroup(projectIdOf(request)),
+        requestIdOf(request),
+      );
+    });
+
     instance.delete('/api/v1/groups/:id', async (request, reply) => {
       return sendSuccess(reply, options.groups.delete(projectIdOf(request)), requestIdOf(request));
     });
@@ -319,13 +345,14 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
     });
 
     instance.delete('/api/v1/projects/:id', async (request, reply) => {
-      const removed = options.projects.deleteProject(projectIdOf(request));
+      const force = queryOf(request).force === 'true' || queryOf(request).force === '1';
+      const removed = options.projects.deleteProject(projectIdOf(request), { force });
       return sendSuccess(reply, removed, requestIdOf(request));
     });
 
     instance.post('/api/v1/projects/:id/start', async (request, reply) => {
       const config = options.projects.getProject(projectIdOf(request));
-      await options.supervisor.startProject(config.id, 'USER');
+      await options.stacks.startProjectWithDependencies(config.id, 'USER');
       return sendSuccess(reply, options.supervisor.getSnapshot(config.id), requestIdOf(request));
     });
 
@@ -404,14 +431,14 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
 
     instance.post('/api/v1/bulk/start', async (request, reply) => {
       const body = parseBulkProjectsRequest(request.body);
-      const results = await options.supervisor.startProjects(body.projectIds);
-      return sendSuccess(reply, { results }, requestIdOf(request));
+      const result = await options.stacks.startProjects(body.projectIds);
+      return sendSuccess(reply, result, requestIdOf(request));
     });
 
     instance.post('/api/v1/bulk/stop', async (request, reply) => {
       const body = parseBulkProjectsRequest(request.body);
-      const results = await options.supervisor.stopProjects(body.projectIds);
-      return sendSuccess(reply, { results }, requestIdOf(request));
+      const result = await options.stacks.stopProjects(body.projectIds);
+      return sendSuccess(reply, result, requestIdOf(request));
     });
 
     instance.get('/api/v1/settings', async (request, reply) => {

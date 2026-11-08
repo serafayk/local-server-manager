@@ -1,4 +1,4 @@
-import type { ProjectConfig } from '@lsm/contracts';
+import type { ProjectConfig, ProjectDependency } from '@lsm/contracts';
 
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
 export type CommandMode = 'script' | 'custom';
@@ -22,6 +22,8 @@ export interface ProjectFormState {
   executable: string;
   argsText: string;
   environment: EnvironmentRow[];
+  dependsOn: ProjectDependency[];
+  dependencyTimeoutMs: string;
   port: string;
   startOnBoot: boolean;
   enabled: boolean;
@@ -62,6 +64,8 @@ export function emptyFormState(): ProjectFormState {
     executable: 'node',
     argsText: 'server.js',
     environment: [],
+    dependsOn: [],
+    dependencyTimeoutMs: '60000',
     port: '',
     startOnBoot: false,
     enabled: true,
@@ -97,6 +101,8 @@ export function formStateFromConfig(config: ProjectConfig): ProjectFormState {
     executable: config.runtime.executable,
     argsText: config.runtime.args.join('\n'),
     environment: Object.entries(config.environment).map(([key, value]) => ({ key, value })),
+    dependsOn: (config.dependsOn ?? []).map((dependency) => ({ ...dependency })),
+    dependencyTimeoutMs: String(config.dependencyTimeoutMs ?? 60_000),
     port: config.port === null ? '' : String(config.port),
     startOnBoot: config.startOnBoot,
     enabled: config.enabled,
@@ -249,6 +255,11 @@ function buildSharedBody(state: ProjectFormState): Record<string, unknown> {
     serveMode: state.serveMode,
     outputDir: state.outputDir.trim() === '' ? null : state.outputDir.trim(),
     environment: buildEnvironment(state.environment),
+    dependsOn: state.dependsOn.map((dependency) => ({
+      projectId: dependency.projectId,
+      waitFor: dependency.waitFor,
+    })),
+    dependencyTimeoutMs: parseInteger(state.dependencyTimeoutMs, 60_000),
     port,
     portSource: port === null ? 'none' : 'fixed',
     enabled: state.enabled,
@@ -383,6 +394,15 @@ export function validateAdvanced(state: ProjectFormState): string[] {
   const gracefulTimeout = Number.parseInt(state.gracefulTimeoutMs, 10);
   if (!Number.isInteger(gracefulTimeout) || gracefulTimeout < 100 || gracefulTimeout > 300_000) {
     errors.push('gracefulTimeoutMs deve estar entre 100 e 300000.');
+  }
+
+  const dependencyTimeout = Number.parseInt(state.dependencyTimeoutMs, 10);
+  if (
+    !Number.isInteger(dependencyTimeout) ||
+    dependencyTimeout < 1_000 ||
+    dependencyTimeout > 600_000
+  ) {
+    errors.push('O timeout de dependência deve estar entre 1000 e 600000 ms.');
   }
 
   if (state.healthEnabled) {

@@ -16,6 +16,16 @@ export const exportedProjectSchema = z.strictObject({
   launchMode: z.enum(['auto', 'wrapper', 'direct']).optional(),
   serveMode: z.enum(['process', 'static']).optional(),
   outputDir: z.string().trim().max(1_024).nullable().optional(),
+  dependsOn: z
+    .array(
+      z.strictObject({
+        project: projectNameSchema,
+        waitFor: z.enum(['started', 'ready']).default('ready'),
+      }),
+    )
+    .max(32)
+    .optional(),
+  dependencyTimeoutMs: z.number().int().min(1_000).max(600_000).optional(),
   enabled: z.boolean().optional(),
   startOnBoot: z.boolean().optional(),
   startupOrder: z.number().int().min(0).max(10_000).optional(),

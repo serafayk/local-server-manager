@@ -11,6 +11,7 @@ import {
   useProjectInstances,
   useProjectLogs,
   useProjectQuery,
+  useProjectsQuery,
 } from '../lib/hooks';
 import {
   formatBytes,
@@ -64,6 +65,7 @@ export function ProjectDetailPage() {
   const navigate = useNavigate();
   const { client } = useEngine();
   const query = useProjectQuery(id);
+  const allProjects = useProjectsQuery();
   const instances = useProjectInstances(id);
   const events = useProjectEvents(id);
   const actions = useProjectActions();
@@ -128,6 +130,9 @@ export function ProjectDetailPage() {
   }
 
   const config = project.config;
+  const projectDependents = (allProjects.data ?? []).filter((summary) =>
+    summary.config.dependsOn.some((dependency) => dependency.projectId === config.id),
+  );
 
   return (
     <div>
@@ -415,6 +420,41 @@ export function ProjectDetailPage() {
                 }
               />
               <Definition
+                label="Depende de"
+                value={
+                  config.dependsOn.length === 0
+                    ? 'nada'
+                    : config.dependsOn
+                        .map((dependency) => {
+                          const name =
+                            allProjects.data?.find(
+                              (summary) => summary.config.id === dependency.projectId,
+                            )?.config.name ?? dependency.projectId;
+                          return `${name} (${dependency.waitFor === 'ready' ? 'pronto' : 'iniciado'})`;
+                        })
+                        .join(', ')
+                }
+              />
+              <Definition
+                label="Requerido por"
+                value={
+                  (allProjects.data ?? []).filter((summary) =>
+                    summary.config.dependsOn.some(
+                      (dependency) => dependency.projectId === config.id,
+                    ),
+                  ).length === 0
+                    ? 'ninguém'
+                    : (allProjects.data ?? [])
+                        .filter((summary) =>
+                          summary.config.dependsOn.some(
+                            (dependency) => dependency.projectId === config.id,
+                          ),
+                        )
+                        .map((summary) => summary.config.name)
+                        .join(', ')
+                }
+              />
+              <Definition
                 label="Logger"
                 value={`${config.logging.maxFileSizeMb} MB · ${config.logging.retentionDays} dias`}
               />
@@ -587,14 +627,16 @@ export function ProjectDetailPage() {
             <Button onClick={() => setDeleteOpen(false)}>Cancelar</Button>
             <Button
               variant="danger"
-              loading={actions.remove.isPending}
-              onClick={() =>
-                actions.remove.mutate(config.id, {
+              loading={actions.remove.isPending || actions.removeForced.isPending}
+              onClick={() => {
+                const mutation =
+                  projectDependents.length > 0 ? actions.removeForced : actions.remove;
+                mutation.mutate(config.id, {
                   onSuccess: () => navigate('/projects'),
-                })
-              }
+                });
+              }}
             >
-              Remover
+              {projectDependents.length > 0 ? 'Remover e desvincular' : 'Remover'}
             </Button>
           </>
         }
@@ -603,6 +645,21 @@ export function ProjectDetailPage() {
           Remover <span className="font-semibold">{config.name}</span> do cadastro? A pasta original
           não é alterada.
         </p>
+        {projectDependents.length > 0 ? (
+          <p className="mt-2 text-xs text-amber-300">
+            Estes projetos dependem dele e serão desvinculados:{' '}
+            {projectDependents.map((summary) => summary.config.name).join(', ')}.
+          </p>
+        ) : null}
+        {(actions.remove.error ?? actions.removeForced.error) ? (
+          <div className="mt-3">
+            <ErrorBanner
+              message={
+                (actions.remove.error ?? actions.removeForced.error)?.message ?? 'Falha ao remover'
+              }
+            />
+          </div>
+        ) : null}
       </Dialog>
     </div>
   );

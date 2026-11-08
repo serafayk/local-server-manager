@@ -3,6 +3,7 @@ import type {
   HealthCheckConfig,
   HealthCheckType,
   ProjectConfig,
+  ProjectDependency,
   RestartPolicy,
   RuntimeConfig,
   LoggingConfig,
@@ -23,6 +24,8 @@ interface ProjectJoinRow {
   launch_mode: string;
   serve_mode: string;
   output_dir: string | null;
+  depends_on_json: string;
+  dependency_timeout_ms: number;
   port: number | null;
   port_source: string;
   enabled: number;
@@ -55,6 +58,7 @@ const SELECT_PROJECT = `
 SELECT
   p.id, p.name, p.description, p.group_id, p.working_directory, p.runtime_json,
   p.environment_json, p.launch_mode, p.serve_mode, p.output_dir,
+  p.depends_on_json, p.dependency_timeout_ms,
   p.port, p.port_source, p.enabled, p.start_on_boot, p.startup_order,
   p.logging_json, p.shutdown_json, p.config_schema_version, p.created_at, p.updated_at,
   r.enabled AS r_enabled,
@@ -81,12 +85,12 @@ JOIN health_checks h ON h.project_id = p.id
 const INSERT_PROJECT = `
 INSERT INTO projects (
   id, name, description, group_id, working_directory, runtime_json, environment_json,
-  launch_mode, serve_mode, output_dir,
+  launch_mode, serve_mode, output_dir, depends_on_json, dependency_timeout_ms,
   port, port_source, enabled, start_on_boot, startup_order, logging_json, shutdown_json,
   config_schema_version, created_at, updated_at
 ) VALUES (
   $id, $name, $description, $groupId, $workingDirectory, $runtimeJson, $environmentJson,
-  $launchMode, $serveMode, $outputDir,
+  $launchMode, $serveMode, $outputDir, $dependsOnJson, $dependencyTimeoutMs,
   $port, $portSource, $enabled, $startOnBoot, $startupOrder, $loggingJson, $shutdownJson,
   $schemaVersion, $createdAt, $updatedAt
 )
@@ -139,6 +143,7 @@ function mapRow(row: ProjectJoinRow): ProjectConfig {
     );
     const logging = parseJsonColumn<LoggingConfig>(row.logging_json, 'logging_json');
     const shutdown = parseJsonColumn<ShutdownConfig>(row.shutdown_json, 'shutdown_json');
+    const dependsOn = parseJsonColumn<ProjectDependency[]>(row.depends_on_json, 'depends_on_json');
 
     const restartPolicy: RestartPolicy = {
       enabled: fromSqlBool(row.r_enabled),
@@ -172,6 +177,8 @@ function mapRow(row: ProjectJoinRow): ProjectConfig {
       launchMode: row.launch_mode as ProjectConfig['launchMode'],
       serveMode: row.serve_mode as ProjectConfig['serveMode'],
       outputDir: row.output_dir,
+      dependsOn,
+      dependencyTimeoutMs: row.dependency_timeout_ms,
       environment,
       port: row.port,
       portSource: row.port_source,
@@ -236,6 +243,7 @@ export class SqliteProjectRepository {
               working_directory = $workingDirectory, runtime_json = $runtimeJson,
               environment_json = $environmentJson,
               launch_mode = $launchMode, serve_mode = $serveMode, output_dir = $outputDir,
+              depends_on_json = $dependsOnJson, dependency_timeout_ms = $dependencyTimeoutMs,
               port = $port, port_source = $portSource,
               enabled = $enabled, start_on_boot = $startOnBoot, startup_order = $startupOrder,
               logging_json = $loggingJson, shutdown_json = $shutdownJson,
@@ -253,6 +261,8 @@ export class SqliteProjectRepository {
             launchMode: config.launchMode,
             serveMode: config.serveMode,
             outputDir: config.outputDir,
+            dependsOnJson: JSON.stringify(config.dependsOn),
+            dependencyTimeoutMs: config.dependencyTimeoutMs,
             port: config.port,
             portSource: config.portSource,
             enabled: toSqlBool(config.enabled),
@@ -328,6 +338,8 @@ export class SqliteProjectRepository {
       launchMode: config.launchMode,
       serveMode: config.serveMode,
       outputDir: config.outputDir,
+      dependsOnJson: JSON.stringify(config.dependsOn),
+      dependencyTimeoutMs: config.dependencyTimeoutMs,
       port: config.port,
       portSource: config.portSource,
       enabled: toSqlBool(config.enabled),

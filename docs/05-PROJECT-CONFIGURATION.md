@@ -23,6 +23,8 @@ Exemplo conceitual:
     "NODE_ENV": "development",
     "PORT": "3000"
   },
+  "dependsOn": [{ "projectId": "uuid-do-banco", "waitFor": "ready" }],
+  "dependencyTimeoutMs": 60000,
   "restartPolicy": {
     "enabled": true,
     "maxRetries": 5,
@@ -50,6 +52,15 @@ Exemplo conceitual:
 ```
 
 O schema final deve ser tipado e validado por Zod. O exemplo é ilustrativo e deve ser adaptado aos tipos definitivos.
+
+### Dependências
+
+- `dependsOn`: lista de `{ projectId, waitFor }`. `waitFor: "ready"` aguarda o
+  health check ficar saudável (equivalente a "iniciado" quando o health check
+  está desabilitado); `waitFor: "started"` aguarda apenas o processo iniciar.
+- `dependencyTimeoutMs`: tempo máximo aguardando cada dependência (1000–600000).
+- Ciclos, auto-dependência e referências inexistentes são rejeitados na escrita.
+- A ordem de subida é topológica; `startupOrder` desempata dentro do mesmo nível.
 
 ## 2. Campos obrigatórios
 

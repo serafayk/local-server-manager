@@ -20,7 +20,7 @@ import {
   type ProjectFormState,
 } from '../lib/payload';
 import { queryKeys } from '../lib/queries';
-import { useGroupsQuery, useNodeVersionsQuery } from '../lib/hooks';
+import { useGroupsQuery, useNodeVersionsQuery, useProjectsQuery } from '../lib/hooks';
 import { isTauriRuntime, pickFolder } from '../lib/tauri';
 import { useEngine } from '../providers/engine-provider';
 import {
@@ -80,7 +80,11 @@ export function ProjectForm({
   const isEdit = Boolean(project);
   const groupsQuery = useGroupsQuery();
   const nodeVersionsQuery = useNodeVersionsQuery();
+  const projectsQuery = useProjectsQuery();
   const detectedNodes = nodeVersionsQuery.data ?? [];
+  const dependencyOptions = (projectsQuery.data ?? []).filter(
+    (summary) => summary.config.id !== project?.id,
+  );
 
   const [state, setState] = useState<ProjectFormState>(() => initialState(project, template));
   const [step, setStep] = useState(0);
@@ -110,6 +114,24 @@ export function ProjectForm({
       ...previous,
       environment: previous.environment.map((row, rowIndex) =>
         rowIndex === index ? { ...row, ...patch } : row,
+      ),
+    }));
+  }
+
+  function toggleDependency(projectId: string, checked: boolean): void {
+    setState((previous) => ({
+      ...previous,
+      dependsOn: checked
+        ? [...previous.dependsOn, { projectId, waitFor: 'ready' as const }]
+        : previous.dependsOn.filter((dependency) => dependency.projectId !== projectId),
+    }));
+  }
+
+  function updateDependencyWait(projectId: string, waitFor: 'started' | 'ready'): void {
+    setState((previous) => ({
+      ...previous,
+      dependsOn: previous.dependsOn.map((dependency) =>
+        dependency.projectId === projectId ? { ...dependency, waitFor } : dependency,
       ),
     }));
   }
@@ -677,6 +699,77 @@ export function ProjectForm({
               Execução direta remove ~2 processos de wrapper por projeto. O modo estático atende
               SPAs construídas (não faz SSR).
             </p>
+          </div>
+
+          <div className="rounded-lg border border-zinc-800 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-zinc-200">Dependências</p>
+                <p className="text-[11px] text-zinc-500">
+                  Estes projetos sobem antes. &quot;Pronto&quot; espera o health check; sem health
+                  check, basta o processo iniciar.
+                </p>
+              </div>
+              {state.dependsOn.length > 0 ? (
+                <Field
+                  label="Timeout (ms)"
+                  htmlFor="project-dep-timeout"
+                  hint="Por dependência"
+                  className="w-32"
+                >
+                  <Input
+                    id="project-dep-timeout"
+                    value={state.dependencyTimeoutMs}
+                    inputMode="numeric"
+                    onChange={(event) => update('dependencyTimeoutMs', event.target.value)}
+                  />
+                </Field>
+              ) : null}
+            </div>
+
+            {dependencyOptions.length === 0 ? (
+              <p className="mt-2 text-xs text-zinc-500">Nenhum outro projeto cadastrado.</p>
+            ) : (
+              <ul className="mt-2 max-h-44 space-y-1 overflow-y-auto pr-1">
+                {dependencyOptions.map((option) => {
+                  const selected = state.dependsOn.find(
+                    (dependency) => dependency.projectId === option.config.id,
+                  );
+                  const healthHint = option.config.healthCheck.enabled
+                    ? undefined
+                    : 'sem health check';
+                  return (
+                    <li
+                      key={option.config.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800/70 px-2 py-1"
+                    >
+                      <Checkbox
+                        label={option.config.name}
+                        title={healthHint}
+                        checked={Boolean(selected)}
+                        onChange={(checked) => toggleDependency(option.config.id, checked)}
+                      />
+                      {selected ? (
+                        <Select
+                          aria-label={`Critério para ${option.config.name}`}
+                          className="w-40"
+                          value={selected.waitFor}
+                          onChange={(event) =>
+                            updateDependencyWait(
+                              option.config.id,
+                              event.target.value as 'started' | 'ready',
+                            )
+                          }
+                        >
+                          <option value="ready">pronto (health)</option>
+                          <option value="started">iniciado</option>
+                        </Select>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
 
           <div className="rounded-lg border border-zinc-800 p-3">

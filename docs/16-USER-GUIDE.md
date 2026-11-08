@@ -109,6 +109,26 @@ Em **Modo de serviço**:
 
 O modo estático não faz SSR — use apenas para SPAs (Vite, CRA, export estático).
 
+### Dependências e stacks
+
+Em **Dependências**, marque os projetos que precisam subir antes. Para cada um
+escolha o critério:
+
+- **pronto (health)** — espera o health check ficar saudável. Sem health check
+  configurado, equivale a "iniciado".
+- **iniciado** — basta o processo entrar em execução.
+
+O **Timeout** limita a espera (padrão 60s). Se uma dependência falhar, os
+dependentes não sobem e o erro aparece no resultado da stack.
+
+Em **Grupos**, use **Subir stack** para iniciar o grupo na ordem correta,
+**Parar** para encerrar dependentes antes das dependências e **Reiniciar** para
+o ciclo completo. Dependências fora do grupo também sobem, mas não são paradas
+junto.
+
+Remover um projeto que é dependência de outro mostra quais serão desvinculados;
+confirme com **Remover e desvincular**.
+
 ### Perfil de memória
 
 Em **Execução → Perfil de memória** você aplica `NODE_OPTIONS` ao projeto

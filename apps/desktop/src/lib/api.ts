@@ -58,6 +58,8 @@ export interface LogsResponse {
 
 export interface BulkResponse {
   results: BulkProjectResult[];
+  levels?: string[][];
+  skipped?: Array<{ projectId: string; reason: string }>;
 }
 
 export interface BackupInfo {
@@ -136,8 +138,12 @@ export class EngineClient {
     return this.request('PUT', `/projects/${encodeURIComponent(id)}`, body);
   }
 
-  deleteProject(id: string): Promise<{ id: string; name: string }> {
-    return this.request('DELETE', `/projects/${encodeURIComponent(id)}`);
+  deleteProject(
+    id: string,
+    options: { force?: boolean } = {},
+  ): Promise<{ id: string; name: string }> {
+    const query = options.force ? '?force=true' : '';
+    return this.request('DELETE', `/projects/${encodeURIComponent(id)}${query}`);
   }
 
   startProject(id: string): Promise<RuntimeSnapshot> {
@@ -241,6 +247,18 @@ export class EngineClient {
 
   deleteGroup(id: string): Promise<{ id: string; name: string }> {
     return this.request('DELETE', `/groups/${encodeURIComponent(id)}`);
+  }
+
+  startGroup(id: string): Promise<BulkResponse> {
+    return this.request('POST', `/groups/${encodeURIComponent(id)}/start`);
+  }
+
+  stopGroup(id: string): Promise<BulkResponse> {
+    return this.request('POST', `/groups/${encodeURIComponent(id)}/stop`);
+  }
+
+  restartGroup(id: string): Promise<BulkResponse> {
+    return this.request('POST', `/groups/${encodeURIComponent(id)}/restart`);
   }
 
   exportProjects(): Promise<ExportBundle> {

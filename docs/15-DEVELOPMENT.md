@@ -303,7 +303,21 @@ pnpm --filter @lsm/desktop tauri:build
 - `POST /projects/:id/build` roda o script `build` one-shot com logs e timeout.
 - Migração v3 adiciona `launch_mode`, `serve_mode`, `output_dir`.
 
-## 15. Limitações conhecidas (Fase 7+)
+## 15. Stacks e dependências (Fase 12)
+
+- `dependsOn` (`{ projectId, waitFor }[]`) e `dependencyTimeoutMs` por projeto;
+  migração v4 (`depends_on_json`, `dependency_timeout_ms`).
+- `StackService` resolve dependências transitivas e ordena em níveis
+  topológicos; cada nível sobe em paralelo.
+- `POST /groups/:id/start|stop|restart`; start individual e `bulk/start` também
+  sobem a cadeia. Stop acontece na ordem inversa.
+- Falha em dependência propaga `DEPENDENCY_FAILED` e o dependente não inicia.
+- Ciclo/ausência de dependência são validados na escrita; remover projeto com
+  dependentes exige `force` (desvincula automaticamente).
+- Exportação referencia dependências por nome; importação reconecta após criar
+  todos os projetos.
+
+## 16. Limitações conhecidas (Fase 7+)
 
 1. **Assinatura e updater automático** — o instalador NSIS é gerado, mas assinatura de código e atualização automática ficam para a Fase 7.
 2. **Sem single-instance do desktop** — abrir o app duas vezes abre duas janelas (o Engine continua único por diretório de dados).
@@ -315,7 +329,7 @@ pnpm --filter @lsm/desktop tauri:build
 8. **Stop no Windows é forçado** — janela cooperativa curta (ADR-011).
 9. **Retenção sem limite global de disco** — hoje é por projeto/dias.
 
-## 16. Dados e privacidade
+## 17. Dados e privacidade
 
 - Banco: `%LOCALAPPDATA%\LocalServerManager\data\manager.sqlite`
 - Logs de processo: `%LOCALAPPDATA%\LocalServerManager\logs\<projectId>\<instanceId>.log`

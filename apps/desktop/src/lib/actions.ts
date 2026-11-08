@@ -29,6 +29,10 @@ export function useProjectActions() {
     mutationFn: (id: string) => client.deleteProject(id),
     onSettled: invalidate,
   });
+  const removeForced = useMutation({
+    mutationFn: (id: string) => client.deleteProject(id, { force: true }),
+    onSettled: invalidate,
+  });
   const startMany = useMutation({
     mutationFn: (ids: string[]) => client.bulkStart(ids),
     onSettled: invalidate,
@@ -38,5 +42,5 @@ export function useProjectActions() {
     onSettled: invalidate,
   });
 
-  return { start, stop, restart, remove, startMany, stopMany };
+  return { start, stop, restart, remove, removeForced, startMany, stopMany };
 }

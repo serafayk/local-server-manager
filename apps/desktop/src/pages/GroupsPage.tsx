@@ -2,7 +2,6 @@ import type { ProjectGroup } from '@lsm/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { FolderTree, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useProjectActions } from '../lib/actions';
 import { useGroupsQuery, useProjectsQuery } from '../lib/hooks';
 import { queryKeys } from '../lib/queries';
 import { useEngine } from '../providers/engine-provider';
@@ -14,7 +13,6 @@ export function GroupsPage() {
   const queryClient = useQueryClient();
   const groupsQuery = useGroupsQuery();
   const projectsQuery = useProjectsQuery();
-  const actions = useProjectActions();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('');
@@ -23,6 +21,7 @@ export function GroupsPage() {
   const [editName, setEditName] = useState('');
   const [editSort, setEditSort] = useState('0');
   const [deleteTarget, setDeleteTarget] = useState<ProjectGroup | null>(null);
+  const [stackNotice, setStackNotice] = useState<string | null>(null);
 
   const invalidate = (): void => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.groups });
@@ -69,6 +68,35 @@ export function GroupsPage() {
 
   const groups = groupsQuery.data ?? [];
   const projects = projectsQuery.data ?? [];
+  const nameOf = (projectId: string): string =>
+    projects.find((project) => project.config.id === projectId)?.config.name ?? projectId;
+
+  const summarize = (result: {
+    results: Array<{ projectId: string; success: boolean; message?: string; errorCode?: string }>;
+  }): string => {
+    const failures = result.results.filter((item) => !item.success);
+    if (failures.length === 0) {
+      return `Stack pronta (${result.results.length} projeto(s)).`;
+    }
+    return `Falha em ${failures
+      .map((item) => `${nameOf(item.projectId)}: ${item.message ?? item.errorCode ?? 'erro'}`)
+      .join(' · ')}`;
+  };
+
+  const stackAction = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: 'start' | 'stop' | 'restart' }) =>
+      action === 'start'
+        ? client.startGroup(id)
+        : action === 'stop'
+          ? client.stopGroup(id)
+          : client.restartGroup(id),
+    onSuccess: (result) => {
+      setStackNotice(summarize(result));
+      invalidate();
+    },
+    onError: (error) => setStackNotice(error.message),
+  });
+
   const projectIdsOf = (groupId: string): string[] =>
     projects
       .filter((project) => project.config.groupId === groupId)
@@ -80,7 +108,7 @@ export function GroupsPage() {
     <div>
       <PageHeader
         title="Grupos"
-        description="Organização visual e start/stop em lote. Grupos não criam dependência entre projetos."
+        description="Organização visual e stacks. Subir um grupo respeita dependências e health checks."
         actions={
           <Button
             variant="primary"
@@ -96,6 +124,12 @@ export function GroupsPage() {
       />
 
       {error ? <ErrorBanner message={error.message} /> : null}
+
+      {stackNotice ? (
+        <div className="mt-3 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-200">
+          {stackNotice}
+        </div>
+      ) : null}
 
       <Card className="mt-4" bodyClassName="p-0">
         {groupsQuery.isLoading ? (
@@ -135,19 +169,40 @@ export function GroupsPage() {
                   <div className="flex flex-wrap items-center gap-1.5">
                     <Button
                       size="sm"
+                      variant="primary"
                       disabled={ids.length === 0}
-                      loading={actions.startMany.isPending}
-                      onClick={() => actions.startMany.mutate(ids)}
+                      loading={stackAction.isPending && stackAction.variables?.id === group.id}
+                      title="Sobe o grupo respeitando dependências e health checks"
+                      onClick={() => {
+                        setStackNotice(null);
+                        stackAction.mutate({ id: group.id, action: 'start' });
+                      }}
                     >
-                      Iniciar
+                      Subir stack
                     </Button>
                     <Button
                       size="sm"
                       disabled={ids.length === 0}
-                      loading={actions.stopMany.isPending}
-                      onClick={() => actions.stopMany.mutate(ids)}
+                      loading={stackAction.isPending && stackAction.variables?.id === group.id}
+                      title="Para dependentes antes das dependências"
+                      onClick={() => {
+                        setStackNotice(null);
+                        stackAction.mutate({ id: group.id, action: 'stop' });
+                      }}
                     >
                       Parar
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={ids.length === 0}
+                      loading={stackAction.isPending && stackAction.variables?.id === group.id}
+                      title="Reinicia o grupo na ordem correta"
+                      onClick={() => {
+                        setStackNotice(null);
+                        stackAction.mutate({ id: group.id, action: 'restart' });
+                      }}
+                    >
+                      Reiniciar
                     </Button>
                     <Button
                       size="sm"

@@ -21,6 +21,17 @@ export type ServeMode = 'process' | 'static';
 
 export const SERVE_MODES = ['process', 'static'] as const;
 
+/** Critério para considerar uma dependência pronta para liberar o dependente. */
+export type DependencyWait = 'started' | 'ready';
+
+export const DEPENDENCY_WAITS = ['started', 'ready'] as const;
+
+export interface ProjectDependency {
+  projectId: string;
+  /** `started` aguarda o processo iniciar; `ready` aguarda o health check. */
+  waitFor: DependencyWait;
+}
+
 export interface RestartPolicy {
   enabled: boolean;
   maxRetries: number;
@@ -79,6 +90,10 @@ export interface ProjectConfig {
   /** Diretório servido no modo estático (relativo à raiz do projeto ou absoluto). */
   outputDir: string | null;
   environment: Record<string, string>;
+  /** Projetos que precisam estar prontos antes deste. */
+  dependsOn: ProjectDependency[];
+  /** Tempo máximo aguardando cada dependência (ms). */
+  dependencyTimeoutMs: number;
   port: number | null;
   portSource: PortSource;
   restartPolicy: RestartPolicy;
@@ -90,4 +105,4 @@ export interface ProjectConfig {
   updatedAt: string;
 }
 
-export const CURRENT_CONFIG_SCHEMA_VERSION = 2;
+export const CURRENT_CONFIG_SCHEMA_VERSION = 3;
