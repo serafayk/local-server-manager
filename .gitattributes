@@ -1,0 +1,21 @@
+# Normaliza o texto para LF em qualquer checkout (Windows, Linux, macOS).
+# Sem isso, o core.autocrlf=true do runner Windows converte para CRLF e o
+# Prettier (endOfLine: lf) reprova todos os arquivos no CI.
+* text=auto eol=lf
+
+# Binários não devem sofrer conversão de fim de linha.
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.zip binary
+*.exe binary
+*.dll binary
+
+# Scripts do Windows precisam continuar em CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
