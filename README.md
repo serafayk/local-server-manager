@@ -88,3 +88,7 @@ As versões devem ser escolhidas e fixadas no início da implementação, após 
 ## Como usar esta documentação
 
 Esta documentação é a especificação inicial. Se uma implementação exigir alteração arquitetural, o agente deve explicar o motivo, atualizar o ADR correspondente e manter os princípios obrigatórios. Não implementar tudo em uma única etapa: seguir o roadmap e manter o projeto compilável e testado a cada fase.
+
+## Licença
+
+[MIT](LICENSE) © 2026 Bruno Serafim.
