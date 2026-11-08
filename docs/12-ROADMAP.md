@@ -6,9 +6,8 @@
 - **Fase 1 — concluída:** bootstrap do Engine, instância única, SQLite + migrações, cadastro/listagem/remoção, `spawn` sem shell, supervisor com máquina de estados, logs JSONL e CLI de desenvolvimento.
 - **Fase 2 — concluída:** recovery com backoff/retry budget/cooldown de estabilidade, reconciliação segura de órfãos no boot, bloqueio de `startOnBoot` com órfão comprovado e retenção de logs.
 - **Fase 3 — concluída:** API HTTP local autenticada, rotas de projetos/lote/logs/eventos/settings, `detect`/`import` de pasta, WebSocket com snapshots, heartbeat e backpressure, protocolo versionado.
-- **Fase 4a — concluída (UI):** dashboard, projetos, cadastro em 3 etapas, detalhes, logs virtualizados ao vivo, eventos e configurações. Cliente tipado contra o Engine real.
-- **Fase 4b — pendente (shell Tauri):** depende de Rust/Cargo; falta janela nativa, tray, sidecar do Engine e injeção do endpoint.
-- **Próxima após o shell:** Fase 5 (health check, portas e métricas) — o desktop já reserva a aba e os campos.
+- **Fase 4 — concluída:** UI completa (dashboard, projetos, cadastro em 3 etapas, detalhes, logs ao vivo, eventos, configurações) + shell Tauri 2 com bandeja, close-to-tray e Engine empacotado como recurso.
+- **Próxima:** Fase 5 (health check, portas e métricas) — a UI já reserva a aba e os campos.
 
 Detalhes de execução, comandos e limitações: [15-DEVELOPMENT.md](15-DEVELOPMENT.md) e `CHANGELOG.md`.
 

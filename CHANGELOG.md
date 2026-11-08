@@ -2,6 +2,26 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.5.0] — 2026-11-07
+
+### Fase 4b — Shell Tauri 2
+
+- `apps/desktop/src-tauri` com Tauri 2, janela nativa, tema escuro e CSP restrita a loopback + IPC.
+- Engine empacotado como recurso (`node.exe` + bundle `engine.mjs`), preparado por `pnpm prepare:engine` e ignorado pelo git.
+- Comando `ensure_engine`: reutiliza Engine em execução, remove `engine.json` órfão e sobe o Engine embarcado aguardando até 20 s.
+- Spawn destacado (`CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP`): fechar a interface não encerra o Engine nem os projetos.
+- Bandeja com "Abrir painel" e "Sair da interface"; fechar a janela minimiza para a bandeja.
+- Descoberta no frontend prioriza o comando Tauri, com fallback para `/__engine` (dev) e `window.__LSM_ENGINE__`.
+- Ícones gerados (`32x32`, `128x128`, `128x128@2x`, `icon.ico`).
+- Scripts `tauri:dev` e `tauri:build`; documentação de toolchain e operação.
+- Correções da validação real: normalização de caminhos verbatim (`\\?\`) ao iniciar o Engine e exclusão de `src-tauri/target` do watcher do Vite.
+- Validado no executável de release: Engine embarcado sobe, `/health` responde e o processo **sobrevive** ao fechamento do app.
+
+### Limitações desta versão
+
+- Instalador assinado, updater e desinstalação guiada ficam na Fase 6.
+- Health check, portas e métricas continuam na Fase 5.
+
 ## [0.4.0] — 2026-11-07
 
 ### Fase 4a — Interface desktop (SPA)

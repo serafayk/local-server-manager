@@ -49,6 +49,14 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
+    watch: {
+      ignored: [
+        '**/src-tauri/target/**',
+        '**/src-tauri/resources/**',
+        '**/src-tauri/gen/**',
+        '**/src-tauri/icons/**',
+      ],
+    },
   },
   preview: {
     port: 1421,

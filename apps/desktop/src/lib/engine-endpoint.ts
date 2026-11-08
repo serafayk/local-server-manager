@@ -3,14 +3,36 @@ import type { EngineEndpoint } from './api';
 declare global {
   interface Window {
     /**
-     * Injetado pelo shell Tauri na Fase 4b (comando nativo que lê
-     * engine/engine.json). Em desenvolvimento, o Vite preenche via /__engine.
+     * Injetado opcionalmente pelo shell (fallback). O caminho principal no
+     * Tauri é o comando `ensure_engine`.
      */
     __LSM_ENGINE__?: EngineEndpoint;
+    __TAURI_INTERNALS__?: unknown;
+  }
+}
+
+async function resolveFromTauri(): Promise<EngineEndpoint | null> {
+  if (!window.__TAURI_INTERNALS__) {
+    return null;
+  }
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<EngineEndpoint>('ensure_engine');
+  } catch (error) {
+    throw new Error(
+      `Falha ao iniciar o Engine pelo shell: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
   }
 }
 
 export async function resolveEngineEndpoint(): Promise<EngineEndpoint> {
+  const tauriEndpoint = await resolveFromTauri();
+  if (tauriEndpoint) {
+    return tauriEndpoint;
+  }
+
   if (window.__LSM_ENGINE__) {
     return window.__LSM_ENGINE__;
   }

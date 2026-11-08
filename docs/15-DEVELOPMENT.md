@@ -1,4 +1,4 @@
-# 15 — Desenvolvimento, execução e limitações (Fases 1–4a)
+# 15 — Desenvolvimento, execução e limitações (Fases 1–4)
 
 > Documento operacional. A especificação continua em `01`–`14`.
 
@@ -156,7 +156,7 @@ token comparado em tempo constante, corpo máximo de 1 MB, sem stack trace na
 resposta. Detalhes e rotas em [06-API-CONTRACTS.md](06-API-CONTRACTS.md) e
 ADR-014.
 
-## 7. Desktop (Fase 4a)
+## 7. Desktop (Fase 4)
 
 Estrutura de `apps/desktop`:
 
@@ -185,12 +185,36 @@ Testes da UI: `apps/desktop/src/**/*.test.{ts,tsx}` (Vitest + Testing Library,
 jsdom por arquivo). O fluxo real foi validado no navegador contra o Engine
 compilado: iniciar, logs ao vivo, parar e auditoria.
 
-## 8. Limitações conhecidas (Fase 4b+)
+### Shell Tauri (Fase 4b)
 
-1. **Shell Tauri pendente** — Rust/Cargo não estão instalados; faltam janela nativa, tray, sidecar e injeção de `window.__LSM_ENGINE__`.
-2. **Sem adoção/limpeza de órfão** — a reconciliação bloqueia o boot e registra o PID; matar um órfão comprovado é ação manual até os Job Objects (Fase 7).
-3. **Sem health check, portas e métricas** — Fase 5; a aba de métricas e os campos de health existem, mas a execução não.
-4. **Sem Named Pipe** — o transporte atual é HTTP loopback autenticado (ADR-014).
+```powershell
+# desenvolvimento (compila Rust na primeira vez)
+pnpm --filter @lsm/desktop tauri:dev
+
+# executável + instalador NSIS
+pnpm --filter @lsm/desktop tauri:build
+```
+
+- `prepare:engine` compila o Engine e copia `engine.mjs` + `node.exe` para
+  `src-tauri/resources/engine/` (ignorado pelo git; ~93 MB).
+- Ao abrir, o comando `ensure_engine` reutiliza um Engine já em execução. Se
+  `engine.json` estiver órfão (processo morto), remove o arquivo e sobe o
+  Engine embarcado, aguardando até 20 s.
+- O Engine roda destacado (`CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP`).
+- Fechar a janela minimiza para a bandeja; "Sair da interface" encerra apenas o
+  app. "Abrir painel" restaura a janela.
+- CSP restrita: `connect-src` apenas `127.0.0.1` (HTTP/WS) e IPC do Tauri.
+- Requisitos: Rust estável (MSVC), VS Build Tools com C++ e WebView2.
+- Diagnóstico do shell: `%LOCALAPPDATA%\LocalServerManager\engine\shell.log`
+  (ou `LSM_DATA_DIR\engine\shell.log`) registra descoberta, caminhos de
+  recurso, spawn e reutilização do Engine.
+
+## 8. Limitações conhecidas (Fase 5+)
+
+1. **Instalador/assinatura/updater** — `tauri build` gera NSIS, mas assinatura, atualização e desinstalação guiada ficam na Fase 6.
+2. **Sem single-instance do desktop** — abrir o app duas vezes abre duas janelas (o Engine continua único por diretório de dados).
+3. **Sem adoção/limpeza de órfão** — a reconciliação bloqueia o boot e registra o PID; matar um órfão comprovado é ação manual até os Job Objects (Fase 7).
+4. **Sem health check, portas e métricas** — Fase 5; a aba de métricas e os campos de health existem, mas a execução não.
 5. **`shutdownBehavior=keep-running` não suportado** — exigiria logging desacoplado; a API responde `VALIDATION_ERROR`.
 6. **Token em `engine.json`** — protegido apenas pela ACL do perfil do usuário até a Fase 6.
 7. **Stop no Windows é forçado** — janela cooperativa curta (ADR-011).

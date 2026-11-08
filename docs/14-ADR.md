@@ -2,26 +2,27 @@
 
 Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicionadas no topo com data, contexto, decisão, alternativas e consequências.
 
-## ADR-015 — Interface desktop: SPA React + cliente tipado (Fase 4a)
+## ADR-015 — Interface desktop: SPA React + shell Tauri 2
 
-**Status:** Aceita (Fase 4a; shell Tauri pendente)
+**Status:** Aceita (Fase 4 concluída em 2026-11-07)
 
-**Contexto:** O shell Tauri exige Rust/Cargo, que não estão instalados na máquina de desenvolvimento. A UI, o cliente da API e os fluxos podem ser entregues e validados sem o shell, contra o Engine real no navegador.
+**Contexto:** O shell Tauri exige Rust/Cargo. A UI e o cliente foram entregues primeiro como SPA (Fase 4a) e validados no navegador; o shell nativo entrou na Fase 4b.
 
 **Decisão:**
 
 1. Interface como SPA React 19 + Vite 8 + Tailwind 4, em `apps/desktop`.
 2. Estado do servidor com React Query; logs ao vivo em um buffer Zustand limitado a 2.000 linhas (histórico continua no HTTP/arquivo).
 3. `HashRouter` para funcionar tanto no Vite quanto no protocolo customizado do Tauri.
-4. Descoberta do Engine em desenvolvimento via middleware do Vite (`/__engine` lê `engine.json`). Em produção, o shell Tauri injetará `window.__LSM_ENGINE__` com os mesmos campos.
-5. Componentes de UI próprios (Button, Card, Badge, Dialog, Field, Tabs) em vez do gerador shadcn/ui, para evitar dependência de geração e manter a superfície pequena.
-6. O desktop importa apenas `@lsm/contracts` (tipos puros). `@lsm/config` e `@lsm/shared` não entram no bundle do browser porque dependem de APIs Node.
-7. Eventos WebSocket atualizam o cache do React Query (`project.state.changed`) e o buffer de logs; reconexão invalida consultas. O histórico é mesclado por `sequence` para não duplicar linhas.
+4. Descoberta do Engine: no Tauri, o comando `ensure_engine` lê `engine.json`, testa TCP e sobe o Engine empacotado se preciso; no navegador, o Vite publica `/__engine`; `window.__LSM_ENGINE__` é fallback.
+5. Componentes de UI próprios (Button, Card, Badge, Dialog, Field, Tabs) em vez do gerador shadcn/ui.
+6. O desktop importa apenas `@lsm/contracts` (tipos puros). `@lsm/config` e `@lsm/shared` não entram no bundle do browser.
+7. Eventos WebSocket atualizam o cache do React Query e o buffer de logs; reconexão invalida consultas; histórico mesclado por `sequence`.
 8. Segredos de ambiente aparecem mascarados; o token da API nunca é renderizado.
+9. Shell Tauri 2 (`apps/desktop/src-tauri`): Engine empacotado como recursos (`node.exe` + `engine.mjs`, copiados por `pnpm prepare:engine` e não versionados); spawn destacado com `CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP`; bandeja com "Abrir painel"/"Sair da interface"; fechar a janela minimiza para a bandeja e **não** encerra o Engine; CSP restrita a loopback; Engine já em execução é reutilizado e `engine.json` órfão é removido antes de subir outro.
 
-**Alternativas consideradas:** Electron (descartado pelo ADR-003); shadcn/ui via CLI (mais arquivos e dependências do que o necessário nesta fase).
+**Alternativas consideradas:** Electron (descartado pelo ADR-003); sidecar via plugin shell (menos controle sobre ciclo de vida e logs); Node SEA (mais complexo que empacotar `node.exe`).
 
-**Consequências:** a Fase 4 pode ser validada no navegador com o Engine real e testes de componente. Falta apenas o shell `src-tauri` (janela, tray, sidecar do Engine e injeção do endpoint), que entra assim que Rust estiver disponível.
+**Consequências:** desktop e navegador usam o mesmo cliente tipado. Instalador NSIS, assinatura e updater ficam na Fase 6. O pacote cresce ~93 MB por causa do `node.exe`.
 
 ## ADR-014 — API local HTTP + WebSocket para o desktop
 

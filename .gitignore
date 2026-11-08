@@ -31,3 +31,8 @@ desktop.ini
 
 # Documentação duplicada distribuída em zip
 *.zip
+
+# Tauri: artefatos de build e binários copiados
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/resources/engine/

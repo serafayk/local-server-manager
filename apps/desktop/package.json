@@ -6,12 +6,17 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepare:engine": "pnpm --filter @lsm/engine build && node scripts/prepare-engine-resource.mjs",
+    "tauri": "tauri",
+    "tauri:dev": "pnpm prepare:engine && tauri dev",
+    "tauri:build": "pnpm prepare:engine && tauri build"
   },
   "dependencies": {
     "@lsm/contracts": "workspace:*",
     "@tanstack/react-query": "5.107.1",
     "@tanstack/react-virtual": "3.14.26",
+    "@tauri-apps/api": "2.12.4",
     "clsx": "2.1.1",
     "lucide-react": "1.70.0",
     "react": "19.3.1",
@@ -21,6 +26,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.5",
+    "@tauri-apps/cli": "2.12.4",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.8",
     "@types/react": "19.3.0",

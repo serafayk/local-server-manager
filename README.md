@@ -37,9 +37,9 @@ Construir uma experiência semelhante ao Laragon, mas dedicada ao gerenciamento 
 
 ## Estado atual
 
-**Fases 0–3 concluídas e Fase 4a (interface) concluída** (2026-11-07). O Engine cadastra projetos, inicia/para/reinicia processos reais sem shell, supervisiona com auto-restart e backoff, reconcilia órfãos, grava logs JSONL com retenção e expõe API local autenticada (HTTP + WebSocket). A interface desktop já cobre dashboard, cadastro em etapas, detalhes, logs ao vivo, eventos e configurações.
+**Fases 0–4 concluídas** (2026-11-07). O Engine cadastra projetos, inicia/para/reinicia processos reais sem shell, supervisiona com auto-restart e backoff, reconcilia órfãos, grava logs JSONL com retenção e expõe API local autenticada (HTTP + WebSocket). O desktop está completo como shell Tauri 2 com bandeja e Engine empacotado, cobrindo dashboard, cadastro em etapas, detalhes, logs ao vivo, eventos e configurações.
 
-Pendente: shell Tauri (Rust), health check, métricas e portas. Consulte [docs/15-DEVELOPMENT.md](docs/15-DEVELOPMENT.md) e `CHANGELOG.md`.
+Pendente: health check, métricas, portas, instalador assinado e updater. Consulte [docs/15-DEVELOPMENT.md](docs/15-DEVELOPMENT.md) e `CHANGELOG.md`.
 
 ## Stack proposta
 
