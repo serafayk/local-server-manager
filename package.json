@@ -8,7 +8,7 @@
   "author": "Bruno Serafim",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/brunoserafimcontador-lgtm/local-server-manager.git"
+    "url": "git+https://github.com/serafayk/local-server-manager.git"
   },
   "packageManager": "pnpm@9.15.0",
   "engines": {
