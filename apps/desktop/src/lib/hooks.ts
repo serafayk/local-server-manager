@@ -30,6 +30,15 @@ export function useNodeVersionsQuery() {
   });
 }
 
+export function useTunnelsQuery() {
+  const { client } = useEngine();
+  return useQuery({
+    queryKey: queryKeys.tunnels,
+    queryFn: () => client.listTunnels(),
+    refetchInterval: 5_000,
+  });
+}
+
 export function useProjectQuery(id: string | undefined) {
   const { client } = useEngine();
   return useQuery({

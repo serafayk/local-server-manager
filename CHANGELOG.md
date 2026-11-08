@@ -2,6 +2,18 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.11.0] — 2026-11-08
+
+### Fase 10 — Túneis Cloudflare supervisionados
+
+- Nova entidade `tunnels` (migração v2) com modos **config.yml**, **token** e **quick tunnel**.
+- Start/stop/restart independentes, `start_on_boot`, logs JSONL (`tunnel.log`) e health via `/ready`.
+- Hostnames lidos do `ingress` do config.yml; URL do quick tunnel extraída da saída.
+- Token por `TUNNEL_TOKEN`, nunca em argv/log e exposto apenas como `hasToken`.
+- Portas de métricas 20241–20260 e guarda contra instâncias duplicadas do mesmo túnel/porta.
+- API `/api/v1/tunnels` (CRUD + start/stop/restart/logs) e página **Túneis** no desktop.
+- 11 novos testes; total de 287.
+
 ## [0.10.0] — 2026-11-08
 
 ### Fase 9 — Memória por projeto e perfis

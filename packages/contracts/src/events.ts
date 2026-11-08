@@ -1,4 +1,5 @@
 import type { HealthStatus, LogRecord, RuntimeSnapshot, TerminationReason } from './domain';
+import type { TunnelStatus } from './tunnel';
 
 /**
  * Payloads dos eventos de domínio — docs/06-API-CONTRACTS.md §4.
@@ -79,6 +80,9 @@ export interface DomainEventPayloads {
   'project.log': LogRecord;
   'project.metrics': ProjectMetricsPayload;
   'system.metrics': SystemMetricsPayload;
+  'tunnel.state.changed': { tunnelId: string; status: TunnelStatus };
+  'tunnel.url': { tunnelId: string; url: string };
+  'tunnel.log': LogRecord;
 }
 
 export type DomainEventType = keyof DomainEventPayloads;
@@ -104,6 +108,9 @@ export const DOMAIN_EVENT_TYPES = [
   'project.log',
   'project.metrics',
   'system.metrics',
+  'tunnel.state.changed',
+  'tunnel.url',
+  'tunnel.log',
 ] as const satisfies readonly DomainEventType[];
 
 export interface DomainEvent<K extends DomainEventType = DomainEventType> {

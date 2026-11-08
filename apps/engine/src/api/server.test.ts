@@ -12,6 +12,7 @@ import type {
   ProjectSummary,
   RuntimeSnapshot,
   ScanRootResponse,
+  TunnelSummary,
 } from '@lsm/contracts';
 import { createLogger, createNoopSink } from '@lsm/shared';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -565,6 +566,42 @@ describe('API local — monitoramento', () => {
     } finally {
       removeTempDir(root);
     }
+  });
+
+  it('gerencia túneis (CRUD)', async () => {
+    const { api } = await boot();
+
+    const created = expectData(
+      (
+        await apiCall<TunnelSummary>(api, 'POST', '/api/v1/tunnels', {
+          name: 'túnel api',
+          kind: 'quick',
+          targetPort: 3_999,
+        })
+      ).result,
+    );
+    expect(created.status.state).toBe('STOPPED');
+    expect(created.config.hasToken).toBe(false);
+
+    const list = expectData((await apiCall<TunnelSummary[]>(api, 'GET', '/api/v1/tunnels')).result);
+    expect(list.map((item) => item.config.name)).toContain('túnel api');
+
+    const updated = expectData(
+      (
+        await apiCall<TunnelSummary>(api, 'PUT', `/api/v1/tunnels/${created.config.id}`, {
+          name: 'túnel api 2',
+        })
+      ).result,
+    );
+    expect(updated.config.name).toBe('túnel api 2');
+
+    const removed = await apiCall<{ id: string }>(
+      api,
+      'DELETE',
+      `/api/v1/tunnels/${created.config.id}`,
+    );
+    expect(removed.status).toBe(200);
+    expect(expectData(removed.result).id).toBe(created.config.id);
   });
 
   it('lista versões de Node detectadas', async () => {

@@ -29,6 +29,7 @@ import { applyPendingRestore, BackupManager } from '../backup/backup-manager';
 import { ProjectService } from '../supervisor/project-service';
 import { GroupService } from '../supervisor/group-service';
 import { Supervisor } from '../supervisor/supervisor';
+import { TunnelManager } from '../tunnels/tunnel-manager';
 import { reconcileInstances } from './reconciliation';
 import { acquireInstanceLock, type InstanceLock } from './single-instance';
 
@@ -56,6 +57,7 @@ export interface Engine {
   readonly supervisor: Supervisor;
   readonly projects: ProjectService;
   readonly groups: GroupService;
+  readonly tunnels: TunnelManager;
   readonly metrics: MetricsCollector;
   readonly backups: BackupManager;
   start(): Promise<void>;
@@ -120,6 +122,14 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     batchConcurrency: DEFAULT_ENGINE_SETTINGS.batchConcurrency,
   });
   const groups = new GroupService({ repositories, clock, logger });
+  const tunnels = new TunnelManager({
+    repositories,
+    logManager,
+    processManager,
+    events,
+    clock,
+    logger,
+  });
   const projects = new ProjectService({
     repositories,
     supervisor,
@@ -213,6 +223,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     supervisor,
     projects,
     groups,
+    tunnels,
     metrics,
     backups,
 
@@ -252,6 +263,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
         for (const config of repositories.projects.list()) {
           supervisor.registerProject(config);
         }
+        tunnels.initialize();
 
         const reconciliation = await reconcileInstances({ repositories, clock, logger });
 
@@ -260,6 +272,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
           supervisor,
           projects,
           groups,
+          tunnels,
           repositories,
           logManager,
           events,
@@ -317,6 +330,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
         metrics.start();
 
         await supervisor.startBootProjects(new Set(reconciliation.blockedProjectIds));
+        await tunnels.startBootTunnels();
       } catch (error) {
         started = false;
         await apiServer?.stop().catch(() => undefined);
@@ -353,6 +367,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
         apiServer = null;
         apiInfo = null;
         metrics.stop();
+        await tunnels.shutdown();
         await supervisor.shutdown();
         await logManager.closeAll();
       } finally {

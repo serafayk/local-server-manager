@@ -35,6 +35,7 @@ import { checkPort } from '../ports/port-checker';
 import type { ProjectService } from '../supervisor/project-service';
 import type { GroupService } from '../supervisor/group-service';
 import type { Supervisor } from '../supervisor/supervisor';
+import type { TunnelManager } from '../tunnels/tunnel-manager';
 import { extractBearerToken, extractQueryToken, tokensMatch } from './auth';
 import {
   isAllowedHostHeader,
@@ -53,6 +54,7 @@ export interface ApiServerOptions {
   supervisor: Supervisor;
   projects: ProjectService;
   groups: GroupService;
+  tunnels: TunnelManager;
   repositories: Repositories;
   logManager: LogManager;
   events: EventBus;
@@ -209,7 +211,6 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
     instance.get('/api/v1/groups', async (request, reply) => {
       return sendSuccess(reply, options.groups.list(), requestIdOf(request));
     });
-
     instance.post('/api/v1/groups', async (request, reply) => {
       return sendSuccess(reply, options.groups.create(request.body), requestIdOf(request), 201);
     });
@@ -224,6 +225,63 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
 
     instance.delete('/api/v1/groups/:id', async (request, reply) => {
       return sendSuccess(reply, options.groups.delete(projectIdOf(request)), requestIdOf(request));
+    });
+
+    instance.get('/api/v1/tunnels', async (request, reply) => {
+      return sendSuccess(reply, options.tunnels.list(), requestIdOf(request));
+    });
+
+    instance.post('/api/v1/tunnels', async (request, reply) => {
+      return sendSuccess(reply, options.tunnels.create(request.body), requestIdOf(request), 201);
+    });
+
+    instance.get('/api/v1/tunnels/:id', async (request, reply) => {
+      return sendSuccess(reply, options.tunnels.get(projectIdOf(request)), requestIdOf(request));
+    });
+
+    instance.put('/api/v1/tunnels/:id', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        options.tunnels.update(projectIdOf(request), request.body),
+        requestIdOf(request),
+      );
+    });
+
+    instance.delete('/api/v1/tunnels/:id', async (request, reply) => {
+      return sendSuccess(reply, options.tunnels.remove(projectIdOf(request)), requestIdOf(request));
+    });
+
+    instance.post('/api/v1/tunnels/:id/start', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        await options.tunnels.start(projectIdOf(request)),
+        requestIdOf(request),
+      );
+    });
+
+    instance.post('/api/v1/tunnels/:id/stop', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        await options.tunnels.stop(projectIdOf(request)),
+        requestIdOf(request),
+      );
+    });
+
+    instance.post('/api/v1/tunnels/:id/restart', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        await options.tunnels.restart(projectIdOf(request)),
+        requestIdOf(request),
+      );
+    });
+
+    instance.get('/api/v1/tunnels/:id/logs', async (request, reply) => {
+      const tail = parsePositiveInt(queryOf(request).tail, 200, 1, 5_000);
+      return sendSuccess(
+        reply,
+        { records: options.tunnels.logs(projectIdOf(request), tail) },
+        requestIdOf(request),
+      );
     });
 
     instance.get('/api/v1/system/node-versions', async (request, reply) => {

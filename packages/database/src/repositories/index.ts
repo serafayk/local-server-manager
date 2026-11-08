@@ -4,6 +4,7 @@ import { SqliteGroupRepository } from './group-repository';
 import { SqliteInstanceRepository } from './instance-repository';
 import { SqliteProjectRepository } from './project-repository';
 import { SqliteSettingsRepository } from './settings-repository';
+import { SqliteTunnelRepository } from './tunnel-repository';
 
 export interface Repositories {
   projects: SqliteProjectRepository;
@@ -11,6 +12,7 @@ export interface Repositories {
   instances: SqliteInstanceRepository;
   events: SqliteEventRepository;
   settings: SqliteSettingsRepository;
+  tunnels: SqliteTunnelRepository;
 }
 
 export function createRepositories(db: DatabaseSync): Repositories {
@@ -20,6 +22,7 @@ export function createRepositories(db: DatabaseSync): Repositories {
     instances: new SqliteInstanceRepository(db),
     events: new SqliteEventRepository(db),
     settings: new SqliteSettingsRepository(db),
+    tunnels: new SqliteTunnelRepository(db),
   };
 }
 
@@ -28,3 +31,4 @@ export * from './group-repository';
 export * from './instance-repository';
 export * from './project-repository';
 export * from './settings-repository';
+export * from './tunnel-repository';

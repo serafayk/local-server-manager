@@ -2,6 +2,26 @@
 
 Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicionadas no topo com data, contexto, decisão, alternativas e consequências.
 
+## ADR-021 — Túneis Cloudflare supervisionados
+
+**Status:** Aceita (Fase 10)
+
+**Contexto:** o usuário já mantém um túnel nomeado (`cloudflared`) com vários hostnames, mas precisava iniciar/parar manualmente. O Engine já supervisiona processos; faltava modelar túneis como cidadãos de primeira classe.
+
+**Decisão:**
+
+1. **Entidade `tunnels`** (migração v2) com três modos:
+   - `config`: `cloudflared tunnel --config <yml> --metrics … run`; hostnames lidos do `ingress`;
+   - `token`: `TUNNEL_TOKEN` por variável de ambiente (nunca em argv/log);
+   - `quick`: `cloudflared tunnel --url http://127.0.0.1:<porta>`; URL extraída do stderr.
+2. **Ciclo de vida independente** dos projetos, com `start_on_boot` opcional. Start/stop/restart, logs JSONL (evento `tunnel.log`) e health via `/ready` no endpoint de métricas.
+3. **Portas de métricas** alocadas de 20241–20260 por túnel; `--metrics` explícito evita colisão entre instâncias.
+4. **Guarda de duplicidade**: dois túneis `config` com o mesmo arquivo ou dois `quick` na mesma porta são bloqueados (o Cloudflare balancearia o tráfego do mesmo túnel nomeado).
+5. **Segredos**: token armazenado no SQLite do usuário, exposto apenas como `hasToken`; mascarado na UI e no export.
+6. **Executável**: `cloudflared` do PATH ou `LSM_CLOUDFLARED`; ausência gera `CLOUDFLARED_NOT_FOUND`.
+
+**Limitações:** não cria DNS nem túneis no Cloudflare (requer `cloudflared tunnel login`/dashboard); não gerencia Cloudflare Access; o `config.yml` é lido, nunca reescrito.
+
 ## ADR-020 — Métricas por árvore de processos e perfis de memória
 
 **Status:** Aceita (Fase 9)

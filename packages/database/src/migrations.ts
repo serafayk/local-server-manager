@@ -121,4 +121,28 @@ CREATE INDEX idx_projects_boot
 `,
 };
 
-export const MIGRATIONS: readonly Migration[] = [MIGRATION_001];
+export const MIGRATION_002: Migration = {
+  version: 2,
+  name: 'tunnels',
+  sql: `
+CREATE TABLE tunnels (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+  kind TEXT NOT NULL CHECK (kind IN ('config', 'token', 'quick')),
+  config_path TEXT,
+  target_port INTEGER CHECK (target_port IS NULL OR (target_port BETWEEN 1 AND 65535)),
+  project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+  token TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  start_on_boot INTEGER NOT NULL DEFAULT 0 CHECK (start_on_boot IN (0, 1)),
+  metrics_port INTEGER CHECK (metrics_port IS NULL OR (metrics_port BETWEEN 1024 AND 65535)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX idx_tunnels_boot ON tunnels (start_on_boot, enabled);
+CREATE INDEX idx_tunnels_project ON tunnels (project_id);
+`,
+};
+
+export const MIGRATIONS: readonly Migration[] = [MIGRATION_001, MIGRATION_002];

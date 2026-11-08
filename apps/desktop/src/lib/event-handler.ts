@@ -4,6 +4,8 @@ import type {
   ProjectMetricsPayload,
   ProjectSummary,
   SystemMetricsPayload,
+  TunnelStatus,
+  TunnelSummary,
 } from '@lsm/contracts';
 import type { QueryClient } from '@tanstack/react-query';
 import { queryKeys } from './queries';
@@ -58,6 +60,28 @@ export function applyEngineEvent(event: AnyDomainEvent, targets: EngineEventTarg
     case 'project.deleted': {
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects });
       void queryClient.invalidateQueries({ queryKey: queryKeys.project(event.payload.projectId) });
+      return;
+    }
+
+    case 'tunnel.state.changed': {
+      const status = event.payload.status;
+      queryClient.setQueryData<TunnelSummary[]>(queryKeys.tunnels, (current) =>
+        current?.map((summary) =>
+          summary.config.id === status.tunnelId ? { ...summary, status } : summary,
+        ),
+      );
+      queryClient.setQueryData<TunnelStatus>(queryKeys.tunnel(status.tunnelId), status);
+      return;
+    }
+
+    case 'tunnel.url': {
+      queryClient.setQueryData<TunnelSummary[]>(queryKeys.tunnels, (current) =>
+        current?.map((summary) =>
+          summary.config.id === event.payload.tunnelId
+            ? { ...summary, status: { ...summary.status, url: event.payload.url } }
+            : summary,
+        ),
+      );
       return;
     }
 

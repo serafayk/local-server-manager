@@ -6,3 +6,4 @@ export * from './events';
 export * from './protocol';
 export * from './result';
 export * from './settings';
+export * from './tunnel';

@@ -10,7 +10,7 @@ describe('migrate', () => {
     const result = migrate(db.connection);
 
     expect(result.applied).toEqual(MIGRATIONS.map((migration) => migration.version));
-    expect(currentSchemaVersion(db.connection)).toBe(1);
+    expect(currentSchemaVersion(db.connection)).toBe(MIGRATIONS[MIGRATIONS.length - 1]?.version);
     db.close();
   });
 
@@ -38,6 +38,7 @@ describe('migrate', () => {
     expect(names).toContain('process_instances');
     expect(names).toContain('system_events');
     expect(names).toContain('settings');
+    expect(names).toContain('tunnels');
     expect(names).toContain('schema_migrations');
     db.close();
   });

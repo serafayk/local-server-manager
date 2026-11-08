@@ -17,7 +17,11 @@ import type {
   ProjectSummary,
   RuntimeSnapshot,
   ScanRootResponse,
+  TunnelStatus,
+  TunnelSummary,
   UpdateGroupRequest,
+  UpdateTunnelRequest,
+  CreateTunnelRequest,
 } from '@lsm/contracts';
 
 export interface EngineEndpoint {
@@ -247,6 +251,38 @@ export class EngineClient {
 
   getNodeVersions(): Promise<NodeInstallation[]> {
     return this.request('GET', '/system/node-versions');
+  }
+
+  listTunnels(): Promise<TunnelSummary[]> {
+    return this.request('GET', '/tunnels');
+  }
+
+  createTunnel(body: CreateTunnelRequest): Promise<TunnelSummary> {
+    return this.request('POST', '/tunnels', body);
+  }
+
+  updateTunnel(id: string, body: UpdateTunnelRequest): Promise<TunnelSummary> {
+    return this.request('PUT', `/tunnels/${encodeURIComponent(id)}`, body);
+  }
+
+  deleteTunnel(id: string): Promise<{ id: string; name: string }> {
+    return this.request('DELETE', `/tunnels/${encodeURIComponent(id)}`);
+  }
+
+  startTunnel(id: string): Promise<TunnelStatus> {
+    return this.request('POST', `/tunnels/${encodeURIComponent(id)}/start`, {});
+  }
+
+  stopTunnel(id: string): Promise<TunnelStatus> {
+    return this.request('POST', `/tunnels/${encodeURIComponent(id)}/stop`, {});
+  }
+
+  restartTunnel(id: string): Promise<TunnelStatus> {
+    return this.request('POST', `/tunnels/${encodeURIComponent(id)}/restart`, {});
+  }
+
+  getTunnelLogs(id: string, tail = 200): Promise<{ records: LogRecord[] }> {
+    return this.request('GET', `/tunnels/${encodeURIComponent(id)}/logs?tail=${String(tail)}`);
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {

@@ -282,7 +282,17 @@ pnpm --filter @lsm/desktop tauri:build
   `--max-old-space-size` e `--max-semi-space-size` são aceitos; `--optimize-for-size`
   não é aceito em `NODE_OPTIONS`.
 
-## 13. Limitações conhecidas (Fase 7+)
+## 13. Túneis Cloudflare (Fase 10)
+
+- Entidade própria (`tunnels`, migração v2) em três modos: `config.yml`, token do
+  dashboard e quick tunnel.
+- Start/stop/restart independentes, `start_on_boot`, logs e health via `/ready`.
+- Portas de métricas 20241–20260; guarda contra dois túneis no mesmo config.yml ou
+  na mesma porta quick.
+- Token por `TUNNEL_TOKEN` (nunca em argv) e mascarado na API/UI.
+- UI: página **Túneis** com URL/hostnames, ações e logs por túnel.
+
+## 14. Limitações conhecidas (Fase 7+)
 
 1. **Assinatura e updater automático** — o instalador NSIS é gerado, mas assinatura de código e atualização automática ficam para a Fase 7.
 2. **Sem single-instance do desktop** — abrir o app duas vezes abre duas janelas (o Engine continua único por diretório de dados).
@@ -294,7 +304,7 @@ pnpm --filter @lsm/desktop tauri:build
 8. **Stop no Windows é forçado** — janela cooperativa curta (ADR-011).
 9. **Retenção sem limite global de disco** — hoje é por projeto/dias.
 
-## 14. Dados e privacidade
+## 15. Dados e privacidade
 
 - Banco: `%LOCALAPPDATA%\LocalServerManager\data\manager.sqlite`
 - Logs de processo: `%LOCALAPPDATA%\LocalServerManager\logs\<projectId>\<instanceId>.log`

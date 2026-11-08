@@ -30,6 +30,7 @@ interface StreamState {
 interface InstanceState {
   projectId: string;
   instanceId: string;
+  eventType: 'project.log' | 'tunnel.log';
   captureOutput: boolean;
   maskPatterns: string[];
   fileBasePath: string;
@@ -56,11 +57,23 @@ export class LogManager {
   }
 
   registerInstance(project: ProjectConfig, instanceId: string): void {
+    this.registerStream(project.id, instanceId, project.logging, 'project.log');
+  }
+
+  /**
+   * Registra uma instância de log para qualquer dono (projeto ou túnel).
+   * Túneis usam o mesmo formato JSONL, mas emitem `tunnel.log`.
+   */
+  registerStream(
+    ownerId: string,
+    instanceId: string,
+    logging: LoggingConfig,
+    eventType: 'project.log' | 'tunnel.log' = 'project.log',
+  ): void {
     if (this.instances.has(instanceId)) {
       return;
     }
-    const logging: LoggingConfig = project.logging;
-    const fileBasePath = join(this.options.logsDir, project.id, `${instanceId}.log`);
+    const fileBasePath = join(this.options.logsDir, ownerId, `${instanceId}.log`);
 
     let writer: InstanceLogWriter;
     try {
@@ -70,13 +83,13 @@ export class LogManager {
         onError: (error) => {
           this.options.logger.error(
             'Falha ao escrever arquivo de log',
-            { projectId: project.id, instanceId },
+            { projectId: ownerId, instanceId },
             error,
           );
         },
         onDrop: (dropped) => {
           this.options.logger.warn('Buffer de log cheio; linhas descartadas na gravação', {
-            projectId: project.id,
+            projectId: ownerId,
             instanceId,
             dropped,
           });
@@ -85,19 +98,20 @@ export class LogManager {
     } catch (error) {
       this.options.logger.error(
         'Não foi possível abrir arquivo de log; continuando apenas em memória',
-        { projectId: project.id, instanceId },
+        { projectId: ownerId, instanceId },
         error,
       );
       writer = new InstanceLogWriter({
-        basePath: join(this.options.logsDir, project.id, `${instanceId}.fallback.log`),
+        basePath: join(this.options.logsDir, ownerId, `${instanceId}.fallback.log`),
         maxFileSizeMb: 1,
         onError: () => undefined,
       });
     }
 
     this.instances.set(instanceId, {
-      projectId: project.id,
+      projectId: ownerId,
       instanceId,
+      eventType,
       captureOutput: logging.captureOutput,
       maskPatterns: logging.maskPatterns,
       fileBasePath,
@@ -234,7 +248,11 @@ export class LogManager {
       truncated: record.truncated ? 1 : 0,
     });
     state.ring.push(record);
-    this.options.events.emit('project.log', record, state.projectId);
+    if (state.eventType === 'tunnel.log') {
+      this.options.events.emit('tunnel.log', record, state.projectId);
+    } else {
+      this.options.events.emit('project.log', record, state.projectId);
+    }
   }
 }
 

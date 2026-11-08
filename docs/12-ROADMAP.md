@@ -9,8 +9,8 @@
 - **Fase 4 — concluída:** UI completa (dashboard, projetos, cadastro em 3 etapas, detalhes, logs ao vivo, eventos, configurações) + shell Tauri 2 com bandeja, close-to-tray e Engine empacotado como recurso.
 - **Fase 5 — concluída:** health check HTTP/TCP com threshold e restart opcional com cooldown, detecção de conflito de porta (sem matar o ocupante) e métricas de CPU/memória via PowerShell em lote, expostas na UI.
 - **Fase 6 — concluída:** autostart via Agendador de Tarefas (toggle no app, remoção no desinstalador), backup/restauração do SQLite com aplicação no boot, instalador NSIS por usuário e documentação do usuário.
-- **Fase 8 — concluída:** configuração assistida (Adicionar pela raiz, seletor de pasta, editar/duplicar) e falhas fatais interrompem o retry com causa explícita.
-- **Próxima:** dependências reais entre projetos, perfis, Named Pipe/Job Objects, assinatura e updater.
+- **Fase 10 — concluída:** túneis Cloudflare supervisionados (config.yml, token e quick tunnel), com start/stop, health, logs e URL pública.
+- **Próxima:** domínios amigáveis locais (proxy embutido), dependências entre projetos, perfis, Named Pipe/Job Objects, assinatura e updater.
 
 Detalhes de execução, comandos e limitações: [15-DEVELOPMENT.md](15-DEVELOPMENT.md), [16-USER-GUIDE.md](16-USER-GUIDE.md) e `CHANGELOG.md`.
 

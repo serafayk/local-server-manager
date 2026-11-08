@@ -38,9 +38,9 @@ Construir uma experiência semelhante ao Laragon, mas dedicada ao gerenciamento 
 
 ## Estado atual
 
-**Fases 0–9 concluídas** (2026-11-08). O Engine gerencia projetos Node.js com supervisor próprio, recovery, reconciliação, logs, API local e monitoramento por árvore de processos; o desktop Tauri tem instalador, autostart, backup/restauração, configuração assistida e perfis de memória. Existe também uma skill global do OpenCode (`local-server-manager`) para que agentes cadastrem e iniciem serviços Node pelo LSM.
+**Fases 0–10 concluídas** (2026-11-08). O Engine gerencia projetos Node.js com supervisor próprio, recovery, reconciliação, logs, API local, monitoramento por árvore de processos e túneis Cloudflare supervisionados; o desktop Tauri tem instalador, autostart, backup/restauração, configuração assistida e perfis de memória. Existe também uma skill global do OpenCode (`local-server-manager`).
 
-Backlog: dependências entre projetos, perfis de configuração, Named Pipe/Job Objects, assinatura de código e updater. Consulte [docs/15-DEVELOPMENT.md](docs/15-DEVELOPMENT.md), [docs/16-USER-GUIDE.md](docs/16-USER-GUIDE.md) e `CHANGELOG.md`.
+Backlog: domínios amigáveis locais, dependências entre projetos, profiles, Named Pipe/Job Objects, assinatura de código e updater. Consulte [docs/15-DEVELOPMENT.md](docs/15-DEVELOPMENT.md), [docs/16-USER-GUIDE.md](docs/16-USER-GUIDE.md) e `CHANGELOG.md`.
 
 ## Stack proposta
 

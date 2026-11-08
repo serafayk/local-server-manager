@@ -117,6 +117,7 @@ Projetos marcados com **Iniciar no boot** sobem junto.
 %LOCALAPPDATA%\LocalServerManager\
   data\manager.sqlite
   logs\<projeto>\<instancia>.log
+  logs\<tunel>\<instancia>.log
   backups\
   engine\engine.log
   engine\shell.log
@@ -125,13 +126,39 @@ Projetos marcados com **Iniciar no boot** sobem junto.
 Nada é gravado na pasta de instalação. Remover um projeto do cadastro **não**
 apaga a pasta original.
 
-## 10. Desinstalação
+## 10. Túneis Cloudflare
+
+A página **Túneis** inicia e para o `cloudflared` sem sair do app. O túnel é
+**independente** dos projetos: pode ficar ativo com serviços parados (o
+Cloudflare responderá 502 até o serviço subir).
+
+Três modos:
+
+| Modo           | Uso                                                              |
+| -------------- | ---------------------------------------------------------------- |
+| **config.yml** | Túnel nomeado com vários hostnames; lê o `ingress` do arquivo    |
+| **Token**      | Túnel gerenciado no dashboard da Cloudflare (`TUNNEL_TOKEN`)     |
+| **Quick**      | URL temporária `https://…trycloudflare.com` para uma porta local |
+
+Passos: **Novo túnel** → nome → tipo → (caminho do `config.yml`, token ou porta)
+→ **Criar** → **Iniciar**. A URL/hostnames aparecem na lista; use o ícone de
+documento para ver os logs.
+
+- **Saúde**: verificada em `/ready` do endpoint de métricas (20241–20260).
+- **Boot**: marque “Iniciar com o Engine”.
+- **Segurança**: o token nunca é exibido nem gravado em log; a exposição pública
+  deve ser protegida com Cloudflare Access no dashboard.
+- **Duplicidade**: o app impede dois túneis usando o mesmo `config.yml` ou dois
+  quick tunnels na mesma porta.
+- `cloudflared` precisa estar no PATH (ou defina `LSM_CLOUDFLARED`).
+
+## 11. Desinstalação
 
 O desinstalador remove o app e a tarefa de autostart. Os dados em
 `%LOCALAPPDATA%\LocalServerManager` são preservados; apague manualmente se
 quiser remover tudo. As pastas dos seus projetos nunca são tocadas.
 
-## 11. Problemas comuns
+## 12. Problemas comuns
 
 | Sintoma                     | O que verificar                                                     |
 | --------------------------- | ------------------------------------------------------------------- |

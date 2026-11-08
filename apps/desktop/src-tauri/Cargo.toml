@@ -1,6 +1,6 @@
 [package]
 name = "local-server-manager"
-version = "0.10.0"
+version = "0.11.0"
 description = "Gerenciador local de projetos Node.js"
 authors = ["Local Server Manager"]
 edition = "2021"

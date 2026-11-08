@@ -61,6 +61,15 @@ gerado pelo Engine. Não retornar stack trace; o stack completo fica no log inte
 | PUT    | `/api/v1/groups/:id`             | Renomear/reordenar grupo                   |
 | DELETE | `/api/v1/groups/:id`             | Remover grupo                              |
 | GET    | `/api/v1/system/node-versions`   | Instalações de Node detectadas             |
+| GET    | `/api/v1/tunnels`                | Lista túneis Cloudflare                    |
+| POST   | `/api/v1/tunnels`                | Cria túnel (config/token/quick)            |
+| GET    | `/api/v1/tunnels/:id`            | Detalhe do túnel                           |
+| PUT    | `/api/v1/tunnels/:id`            | Atualiza (parado)                          |
+| DELETE | `/api/v1/tunnels/:id`            | Remove cadastro                            |
+| POST   | `/api/v1/tunnels/:id/start`      | Inicia cloudflared                         |
+| POST   | `/api/v1/tunnels/:id/stop`       | Para                                       |
+| POST   | `/api/v1/tunnels/:id/restart`    | Reinicia                                   |
+| GET    | `/api/v1/tunnels/:id/logs`       | Saída do cloudflared                       |
 | GET    | `/api/v1/projects/:id`           | Detalhar                                   |
 | PUT    | `/api/v1/projects/:id`           | Atualizar (parcial, mesclado)              |
 | DELETE | `/api/v1/projects/:id`           | Remover cadastro                           |
