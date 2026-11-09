@@ -2,6 +2,21 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.16.1] — 2026-11-09
+
+### Corrigido
+
+- **"Não foi possível falar com o Engine" na 0.16.0.** O cliente passou a enviar
+  `credentials: 'include'` em todas as chamadas, inclusive no desktop (origem
+  `tauri://localhost`); como o Engine não respondia
+  `Access-Control-Allow-Credentials`, o webview bloqueava a resposta e a UI caía
+  na tela de erro com o Engine perfeitamente em execução.
+  - Desktop volta a usar apenas o Bearer token (sem cookies).
+  - Cookies e CSRF seguem valendo na UI web (mesma origem, sessão).
+- CORS do Engine agora reflete a origem da allowlist, envia
+  `Access-Control-Allow-Credentials: true` e libera `x-csrf-token` no preflight.
+- Teste de regressão cobre as credenciais no preflight.
+
 ## [0.16.0] — 2026-11-09
 
 ### Fase 15 — Painel web e acesso sem o app

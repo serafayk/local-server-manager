@@ -299,7 +299,8 @@ Com o Engine em execução, a mesma interface pode ser aberta no navegador:
   reinicia.
 - O cookie é `HttpOnly` e `SameSite=Strict`; ações de escrita exigem token CSRF,
   então um site malicioso não consegue operar o painel.
-- Tudo continua restrito a **127.0.0.1**. Para acessar de outro dispositivo, use
-  um túnel Cloudflare (o painel pedirá a senha).
+- Tudo continua restrito a **127.0.0.1**: o Engine só aceita `Host` de loopback, então
+  o painel não abre por túnel nem de outro dispositivo (exposição opcional na LAN está
+  no backlog).
 - O botão **Abrir no navegador** em Configurações leva direto ao painel.
 - Os logs e eventos ao vivo funcionam na web (WebSocket autenticado por cookie).

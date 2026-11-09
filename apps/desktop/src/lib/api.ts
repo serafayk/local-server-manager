@@ -398,12 +398,18 @@ export class EngineClient {
       headers['x-csrf-token'] = csrf;
     }
 
+    // Cookies só fazem sentido na UI web (mesma origem, autenticação por
+    // sessão). No desktop a origem é o webview do Tauri e o Bearer basta:
+    // `include` exigiria Access-Control-Allow-Credentials e o navegador
+    // bloquearia a resposta.
+    const usesSession = this.endpoint.token === '';
+
     let response: Response;
     try {
       response = await fetch(`${this.endpoint.baseUrl}/api/v1${path}`, {
         method,
         headers,
-        credentials: 'include',
+        credentials: usesSession ? 'include' : 'same-origin',
         body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch (error) {

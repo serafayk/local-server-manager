@@ -18,7 +18,7 @@ Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicion
 6. **Bind exclusivo em 127.0.0.1**; exposição pública continua sendo papel dos túneis. LAN fica no backlog.
 7. **SPA fallback** apenas para rotas sem extensão; `/api/*` desconhecido mantém `ROUTE_NOT_FOUND`.
 
-**Consequências:** o painel abre no navegador e no celular via túnel, com senha, sem depender do app aberto. A sessão cai quando o Engine reinicia (memória). O WebSocket aceita cookie, então logs ao vivo funcionam na web.
+**Consequências:** o painel abre no navegador local (bookmark estável), com senha, sem depender do app aberto. A sessão cai quando o Engine reinicia (memória). O WebSocket aceita cookie, então logs ao vivo funcionam na web. Como o Engine valida `Host` de loopback, o painel não é alcançável por túnel/LAN — exposição opcional fica no backlog.
 
 ## ADR-025 - Serviços além de Node: Compose e PostgreSQL dedicado
 

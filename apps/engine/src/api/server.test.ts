@@ -191,6 +191,9 @@ describe('API local — autenticação e envelope', () => {
       },
     });
     expect(allowed.headers.get('access-control-allow-origin')).toBe('http://localhost:1420');
+    // O desktop (Tauri) e a UI web precisam de credenciais na resposta.
+    expect(allowed.headers.get('access-control-allow-credentials')).toBe('true');
+    expect(allowed.headers.get('access-control-allow-headers')).toContain('x-csrf-token');
 
     const denied = await fetch(`${api.baseUrl}/api/v1/health`, {
       method: 'OPTIONS',
@@ -200,6 +203,7 @@ describe('API local — autenticação e envelope', () => {
       },
     });
     expect(denied.headers.get('access-control-allow-origin')).toBeNull();
+    expect(denied.headers.get('access-control-allow-credentials')).toBeNull();
   });
 });
 

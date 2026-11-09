@@ -726,10 +726,26 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
 
     await instance.register(cors, {
       origin: (origin, callback) => {
-        callback(null, isAllowedOrigin(origin, corsOrigins));
+        // Reflete apenas origens da allowlist (obrigatório com credentials).
+        // Requisições sem Origin (CLI, testes, curl) não levam cabeçalho CORS.
+        if (typeof origin !== 'string' || !isAllowedOrigin(origin, corsOrigins)) {
+          callback(null, false);
+          return;
+        }
+        callback(null, origin);
       },
+      // A UI web usa cookie de sessão quando servida por outra origem da
+      // allowlist (ex.: túnel), então o preflight precisa permitir credenciais
+      // e o cabeçalho de CSRF.
+      credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['authorization', 'content-type', 'x-request-id', 'x-protocol-version'],
+      allowedHeaders: [
+        'authorization',
+        'content-type',
+        'x-request-id',
+        'x-protocol-version',
+        'x-csrf-token',
+      ],
       maxAge: 600,
     });
     await instance.register(websocket, { options: { maxPayload: MAX_BODY_BYTES } });
