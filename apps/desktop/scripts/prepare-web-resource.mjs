@@ -23,4 +23,12 @@ cpSync(dist, target, {
   // Sourcemaps não são necessários para servir a UI e dobrariam o instalador.
   filter: (source) => !source.endsWith('.map'),
 });
+
+// Remove assets antigos que o Tauri manteve na área de staging.
+for (const profile of ['release', 'debug']) {
+  rmSync(join(desktopDir, 'src-tauri', 'target', profile, 'resources', 'engine', 'web'), {
+    recursive: true,
+    force: true,
+  });
+}
 console.log(`UI web copiada para ${target}`);
