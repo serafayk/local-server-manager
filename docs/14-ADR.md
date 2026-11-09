@@ -16,6 +16,7 @@ Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicion
 4. **Backup:** `pg_dump` sob demanda (`POST /projects/:id/backup`), gerando `.dump` custom em `<backups>/postgres`. Restauração fica para o backlog.
 5. **Detecção:** `GET /system/tools` lista instalações do PostgreSQL e o estado do Docker; nada é baixado automaticamente.
 6. **Limpeza:** excluir o projeto remove o serviço; o data dir permanece no disco de propósito.
+7. **Parada graciosa:** `stopCommand` opcional roda antes do kill (timeout de 30s, falha não bloqueia), cobrindo agentes que precisam liberar lease no servidor.
 
 **Consequências:** bancos entram no grafo de dependências (`postgres` → `api` → `web`). Criar o serviço exige administrador: com UAC desabilitado funciona direto; com UAC habilitado, o app precisa ser aberto como administrador (a mensagem de erro orienta). Docker Compose depende do Docker Desktop e é testado com CLI simulado; o fluxo com Docker real será validado quando estiver instalado.
 

@@ -25,6 +25,7 @@ export const exportedProjectSchema = z.strictObject({
   kind: z.enum(PROJECT_KINDS).optional(),
   compose: composePatchSchema.nullable().optional(),
   postgres: postgresPatchSchema.nullable().optional(),
+  stopCommand: runtimeConfigSchema.nullable().optional(),
   dependsOn: z
     .array(
       z.strictObject({

@@ -120,6 +120,8 @@ export interface ProjectConfig {
   kind: ProjectKind;
   compose: ComposeServiceConfig | null;
   postgres: PostgresServiceConfig | null;
+  /** Executado antes de encerrar o processo (ex.: `php bin/robot --stop`). */
+  stopCommand: RuntimeConfig | null;
   environment: Record<string, string>;
   /** Projetos que precisam estar prontos antes deste. */
   dependsOn: ProjectDependency[];
@@ -136,4 +138,4 @@ export interface ProjectConfig {
   updatedAt: string;
 }
 
-export const CURRENT_CONFIG_SCHEMA_VERSION = 4;
+export const CURRENT_CONFIG_SCHEMA_VERSION = 5;

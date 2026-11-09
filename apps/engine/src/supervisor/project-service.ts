@@ -496,6 +496,7 @@ export class ProjectService {
         kind: config.kind,
         compose: config.compose,
         postgres: config.postgres === null ? null : { ...config.postgres, password: '' },
+        stopCommand: config.stopCommand,
         dependsOn: config.dependsOn.flatMap((dependency) => {
           const name = projectNames.get(dependency.projectId);
           return name ? [{ project: name, waitFor: dependency.waitFor }] : [];
@@ -546,6 +547,7 @@ export class ProjectService {
           kind: item.kind ?? 'node',
           compose: item.compose ?? null,
           postgres: item.postgres ?? null,
+          stopCommand: item.stopCommand ?? null,
           enabled: item.enabled ?? true,
           startOnBoot: item.startOnBoot ?? false,
           startupOrder: item.startupOrder ?? 0,

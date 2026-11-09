@@ -387,6 +387,16 @@ export function ProjectDetailPage() {
                   value={<span className="mono text-xs">{config.compose.file}</span>}
                 />
               ) : null}
+              {config.stopCommand ? (
+                <Definition
+                  label="Comando de parada"
+                  value={
+                    <span className="mono text-xs">
+                      {formatCommand(config.stopCommand.executable, config.stopCommand.args)}
+                    </span>
+                  }
+                />
+              ) : null}
               <Definition label="Porta" value={config.port ?? '—'} />
               <Definition
                 label="Ambiente"

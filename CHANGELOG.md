@@ -2,6 +2,15 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.15.1] — 2026-11-09
+
+### Parada graciosa por projeto
+
+- `stopCommand` (`executable` + `args`) opcional, executado antes de encerrar o processo, com timeout de 30s; falhas são registradas sem impedir a parada.
+- Migração v7 (`stop_command_json`), validação, export/import e campo no cadastro.
+- Caso de uso: robô PHP (`php bin\robot --config=... --stop`) soltando o lease antes do kill.
+- 2 novos testes; total de 353.
+
 ## [0.15.0] — 2026-11-09
 
 ### Fase 14 — Serviços além de Node

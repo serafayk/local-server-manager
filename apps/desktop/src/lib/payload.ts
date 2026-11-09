@@ -32,6 +32,8 @@ export interface ProjectFormState {
   executable: string;
   argsText: string;
   environment: EnvironmentRow[];
+  stopExecutable: string;
+  stopArgsText: string;
   dependsOn: ProjectDependency[];
   dependencyTimeoutMs: string;
   port: string;
@@ -84,6 +86,8 @@ export function emptyFormState(): ProjectFormState {
     executable: 'node',
     argsText: 'server.js',
     environment: [],
+    stopExecutable: '',
+    stopArgsText: '',
     dependsOn: [],
     dependencyTimeoutMs: '60000',
     port: '',
@@ -131,6 +135,8 @@ export function formStateFromConfig(config: ProjectConfig): ProjectFormState {
     executable: config.runtime.executable,
     argsText: config.runtime.args.join('\n'),
     environment: Object.entries(config.environment).map(([key, value]) => ({ key, value })),
+    stopExecutable: config.stopCommand?.executable ?? '',
+    stopArgsText: config.stopCommand?.args.join('\n') ?? '',
     dependsOn: (config.dependsOn ?? []).map((dependency) => ({ ...dependency })),
     dependencyTimeoutMs: String(config.dependencyTimeoutMs ?? 60_000),
     port: config.port === null ? '' : String(config.port),
@@ -314,6 +320,13 @@ function buildSharedBody(state: ProjectFormState): Record<string, unknown> {
     serveMode: state.serveMode,
     outputDir: state.outputDir.trim() === '' ? null : state.outputDir.trim(),
     environment: buildEnvironment(state.environment),
+    stopCommand:
+      state.stopExecutable.trim() === ''
+        ? null
+        : {
+            executable: state.stopExecutable.trim(),
+            args: parseArgsText(state.stopArgsText),
+          },
     dependsOn: state.dependsOn.map((dependency) => ({
       projectId: dependency.projectId,
       waitFor: dependency.waitFor,
@@ -393,6 +406,10 @@ export function validateBasics(state: ProjectFormState): string[] {
 
 export function validateCommand(state: ProjectFormState): string[] {
   const errors: string[] = [];
+
+  if (state.stopExecutable.trim() === '' && state.stopArgsText.trim() !== '') {
+    errors.push('Informe o executável do comando de parada (ou deixe os argumentos vazios).');
+  }
 
   if (state.kind === 'compose') {
     if (state.composeFile.trim() === '') {

@@ -199,6 +199,14 @@ ALTER TABLE projects ADD COLUMN postgres_json TEXT;
 `,
 };
 
+export const MIGRATION_007: Migration = {
+  version: 7,
+  name: 'stop-command',
+  sql: `
+ALTER TABLE projects ADD COLUMN stop_command_json TEXT;
+`,
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   MIGRATION_001,
   MIGRATION_002,
@@ -206,4 +214,5 @@ export const MIGRATIONS: readonly Migration[] = [
   MIGRATION_004,
   MIGRATION_005,
   MIGRATION_006,
+  MIGRATION_007,
 ];

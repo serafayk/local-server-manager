@@ -71,6 +71,9 @@ O schema final deve ser tipado e validado por Zod. O exemplo é ilustrativo e de
 - `postgres`: `{ version, binDir, dataDir, username, password, port }`. Campos
   nulos usam defaults do Engine (`<dados>/postgres/<id>` e porta 55432); senha
   vazia é gerada na criação. A instância roda como serviço do Windows.
+- `stopCommand`: `{ executable, args }` opcional, executado antes de encerrar o
+  processo (parada graciosa), com timeout de 30s. Falhas são registradas e não
+  impedem a parada.
 
 ## 2. Campos obrigatórios
 

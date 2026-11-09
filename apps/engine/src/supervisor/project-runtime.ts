@@ -73,6 +73,8 @@ interface FailureDiagnosis {
   retryable: boolean;
 }
 
+const STOP_COMMAND_TIMEOUT_MS = 30_000;
+
 const FAILURE_PATTERNS: ReadonlyArray<{ pattern: RegExp; hint: string; retryable: boolean }> = [
   {
     pattern: /EADDRINUSE|address already in use/i,
@@ -567,6 +569,10 @@ export class ProjectRuntime {
     }
     this.persistEvent('info', 'project.stop.requested', `stop solicitado (${reason})`, { pid });
 
+    if (instanceId !== null) {
+      await this.runStopCommand(instanceId);
+    }
+
     if (this.configValue.serveMode === 'static' && instanceId !== null) {
       await this.stopStatic(instanceId);
       return;
@@ -840,6 +846,56 @@ export class ProjectRuntime {
       instanceId,
       `initdb concluído (porta ${resolved.port})`,
     );
+  }
+
+  /**
+   * Comando opcional de parada graciosa (ex.: `php bin/robot --stop`).
+   * Roda antes do kill e nunca impede o encerramento.
+   */
+  private async runStopCommand(instanceId: string): Promise<void> {
+    const command = this.configValue.stopCommand;
+    if (command === null) {
+      return;
+    }
+    this.deps.logManager.recordSystem(
+      this.projectId,
+      instanceId,
+      `comando de parada: ${command.executable} ${command.args.join(' ')}`.trim(),
+    );
+    try {
+      const managed = this.deps.processManager.spawn({
+        executable: command.executable,
+        args: command.args,
+        cwd: this.configValue.workingDirectory,
+        env: { ...this.configValue.environment },
+      });
+      managed.onStdout((chunk) =>
+        this.deps.logManager.push(this.projectId, instanceId, 'stdout', chunk),
+      );
+      managed.onStderr((chunk) =>
+        this.deps.logManager.push(this.projectId, instanceId, 'stderr', chunk),
+      );
+      const code = await waitForExit(managed, STOP_COMMAND_TIMEOUT_MS, () =>
+        this.deps.processManager.stop(managed.pid, { gracefulTimeoutMs: 3_000 }),
+      );
+      this.deps.logManager.recordSystem(
+        this.projectId,
+        instanceId,
+        `comando de parada encerrou (code=${String(code)})`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.deps.logManager.recordSystem(
+        this.projectId,
+        instanceId,
+        `comando de parada falhou: ${message}`,
+      );
+      this.deps.logger.warn(
+        'Falha ao executar comando de parada',
+        { projectId: this.projectId },
+        error,
+      );
+    }
   }
 
   /** Garante que containers não fiquem órfãos quando o CLI é encerrado. */

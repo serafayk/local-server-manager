@@ -1039,6 +1039,40 @@ export function ProjectForm({
             </div>
           ) : null}
 
+          {state.kind !== 'postgres' ? (
+            <div className="rounded-lg border border-zinc-800 p-3">
+              <p className="text-sm font-medium text-zinc-200">Comando de parada (opcional)</p>
+              <p className="text-[11px] text-zinc-500">
+                Executado antes de encerrar o processo. Útil para parada graciosa (ex.:{' '}
+                <span className="mono">php bin\robot --config=... --stop</span>).
+              </p>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <Field
+                  label="Executável"
+                  htmlFor="stop-executable"
+                  hint="Vazio desabilita o comando."
+                >
+                  <Input
+                    id="stop-executable"
+                    value={state.stopExecutable}
+                    onChange={(event) => update('stopExecutable', event.target.value)}
+                    placeholder="C:\laragon\bin\php\php.exe"
+                    className="mono"
+                  />
+                </Field>
+                <Field label="Argumentos" htmlFor="stop-args" hint="Um por linha; timeout de 30s.">
+                  <Textarea
+                    id="stop-args"
+                    value={state.stopArgsText}
+                    onChange={(event) => update('stopArgsText', event.target.value)}
+                    rows={2}
+                    placeholder={'bin\\robot\n--config=tools\\windows\\robot.json\n--stop'}
+                  />
+                </Field>
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2">
             <div>
               <p className="text-xs font-medium text-zinc-300">Configuração avançada</p>

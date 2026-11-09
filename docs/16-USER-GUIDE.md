@@ -163,7 +163,9 @@ Em **Novo projeto → Tipo de projeto** você escolhe como o serviço roda:
 **Processo genérico** — qualquer executável com argumentos (PHP, Python, .exe),
 sem shell. É o tipo ideal para um robô/worker: informe o executável
 (`C:\laragon\bin\php\php.exe`) e os argumentos
-(`bin\robot --config=...`).
+(`bin\robot --config=...`). Em **Comando de parada (opcional)** você pode
+informar a mesma chamada com `--stop` para o processo encerrar com limpeza antes
+do kill.
 
 **Docker Compose** — informe o arquivo (`docker-compose.yml`) e, opcionalmente,
 o nome do projeto (`-p`) e o executável do Docker. O LSM roda

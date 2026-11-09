@@ -282,6 +282,7 @@ export const createProjectRequestSchema = z
     kind: projectKindSchema,
     compose: composeServiceSchema.nullable().optional(),
     postgres: postgresServiceSchema.nullable().optional(),
+    stopCommand: runtimeConfigSchema.nullable().optional(),
     environment: environmentSchema,
     dependsOn: z.array(projectDependencySchema).max(32).default([]),
     dependencyTimeoutMs: dependencyTimeoutSchema,
@@ -359,6 +360,7 @@ export interface NormalizedProjectFields {
   kind: ProjectKind;
   compose: ComposeServiceConfig | null;
   postgres: PostgresServiceConfig | null;
+  stopCommand: RuntimeConfig | null;
   environment: Record<string, string>;
   dependsOn: ProjectDependency[];
   dependencyTimeoutMs: number;
@@ -402,6 +404,12 @@ function normalizeFields(parsed: ParsedCreateProjectRequest): NormalizedProjectF
           username: parsed.postgres.username,
           password: parsed.postgres.password,
           port: parsed.postgres.port ?? null,
+        }
+      : null,
+    stopCommand: parsed.stopCommand
+      ? {
+          executable: parsed.stopCommand.executable,
+          args: [...parsed.stopCommand.args],
         }
       : null,
     environment: { ...parsed.environment },
@@ -455,6 +463,7 @@ export const updateProjectRequestSchema = z.strictObject({
   kind: z.enum(PROJECT_KINDS).optional(),
   compose: composePatchSchema.nullable().optional(),
   postgres: postgresPatchSchema.nullable().optional(),
+  stopCommand: runtimeConfigSchema.nullable().optional(),
   environment: z.record(z.string(), z.string().max(8_192)).optional(),
   dependsOn: z.array(projectDependencySchema).max(32).optional(),
   // Sem `.default()` aqui: no PUT, ausência do campo significa "não alterar".
@@ -497,6 +506,7 @@ export function parseUpdateProjectRequest(
     merged.postgres =
       patch.postgres === null ? null : { ...(existing.postgres ?? {}), ...patch.postgres };
   }
+  if (patch.stopCommand !== undefined) merged.stopCommand = patch.stopCommand;
   if (patch.environment !== undefined) merged.environment = patch.environment;
   if (patch.dependsOn !== undefined) merged.dependsOn = patch.dependsOn;
   if (patch.dependencyTimeoutMs !== undefined) {

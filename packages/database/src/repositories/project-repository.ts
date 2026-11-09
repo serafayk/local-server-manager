@@ -29,6 +29,7 @@ interface ProjectJoinRow {
   kind: string;
   compose_json: string | null;
   postgres_json: string | null;
+  stop_command_json: string | null;
   depends_on_json: string;
   dependency_timeout_ms: number;
   port: number | null;
@@ -63,7 +64,7 @@ const SELECT_PROJECT = `
 SELECT
   p.id, p.name, p.description, p.group_id, p.working_directory, p.runtime_json,
   p.environment_json, p.launch_mode, p.serve_mode, p.output_dir,
-  p.kind, p.compose_json, p.postgres_json,
+  p.kind, p.compose_json, p.postgres_json, p.stop_command_json,
   p.depends_on_json, p.dependency_timeout_ms,
   p.port, p.port_source, p.enabled, p.start_on_boot, p.startup_order,
   p.logging_json, p.shutdown_json, p.config_schema_version, p.created_at, p.updated_at,
@@ -91,13 +92,13 @@ JOIN health_checks h ON h.project_id = p.id
 const INSERT_PROJECT = `
 INSERT INTO projects (
   id, name, description, group_id, working_directory, runtime_json, environment_json,
-  launch_mode, serve_mode, output_dir, kind, compose_json, postgres_json,
+  launch_mode, serve_mode, output_dir, kind, compose_json, postgres_json, stop_command_json,
   depends_on_json, dependency_timeout_ms,
   port, port_source, enabled, start_on_boot, startup_order, logging_json, shutdown_json,
   config_schema_version, created_at, updated_at
 ) VALUES (
   $id, $name, $description, $groupId, $workingDirectory, $runtimeJson, $environmentJson,
-  $launchMode, $serveMode, $outputDir, $kind, $composeJson, $postgresJson,
+  $launchMode, $serveMode, $outputDir, $kind, $composeJson, $postgresJson, $stopCommandJson,
   $dependsOnJson, $dependencyTimeoutMs,
   $port, $portSource, $enabled, $startOnBoot, $startupOrder, $loggingJson, $shutdownJson,
   $schemaVersion, $createdAt, $updatedAt
@@ -160,6 +161,10 @@ function mapRow(row: ProjectJoinRow): ProjectConfig {
       row.postgres_json === null
         ? null
         : parseJsonColumn<PostgresServiceConfig>(row.postgres_json, 'postgres_json');
+    const stopCommand =
+      row.stop_command_json === null
+        ? null
+        : parseJsonColumn<RuntimeConfig>(row.stop_command_json, 'stop_command_json');
 
     const restartPolicy: RestartPolicy = {
       enabled: fromSqlBool(row.r_enabled),
@@ -196,6 +201,7 @@ function mapRow(row: ProjectJoinRow): ProjectConfig {
       kind: row.kind as ProjectConfig['kind'],
       compose,
       postgres,
+      stopCommand,
       dependsOn,
       dependencyTimeoutMs: row.dependency_timeout_ms,
       environment,
@@ -263,6 +269,7 @@ export class SqliteProjectRepository {
               environment_json = $environmentJson,
               launch_mode = $launchMode, serve_mode = $serveMode, output_dir = $outputDir,
               kind = $kind, compose_json = $composeJson, postgres_json = $postgresJson,
+              stop_command_json = $stopCommandJson,
               depends_on_json = $dependsOnJson, dependency_timeout_ms = $dependencyTimeoutMs,
               port = $port, port_source = $portSource,
               enabled = $enabled, start_on_boot = $startOnBoot, startup_order = $startupOrder,
@@ -284,6 +291,8 @@ export class SqliteProjectRepository {
             kind: config.kind,
             composeJson: config.compose === null ? null : JSON.stringify(config.compose),
             postgresJson: config.postgres === null ? null : JSON.stringify(config.postgres),
+            stopCommandJson:
+              config.stopCommand === null ? null : JSON.stringify(config.stopCommand),
             dependsOnJson: JSON.stringify(config.dependsOn),
             dependencyTimeoutMs: config.dependencyTimeoutMs,
             port: config.port,
@@ -364,6 +373,7 @@ export class SqliteProjectRepository {
       kind: config.kind,
       composeJson: config.compose === null ? null : JSON.stringify(config.compose),
       postgresJson: config.postgres === null ? null : JSON.stringify(config.postgres),
+      stopCommandJson: config.stopCommand === null ? null : JSON.stringify(config.stopCommand),
       dependsOnJson: JSON.stringify(config.dependsOn),
       dependencyTimeoutMs: config.dependencyTimeoutMs,
       port: config.port,
