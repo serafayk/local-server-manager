@@ -131,6 +131,12 @@ export interface HostsSyncResult {
   error: string | null;
 }
 
+export interface WebAuthStatus {
+  configured: boolean;
+  authenticated: boolean;
+  csrf: string | null;
+}
+
 export interface PostgresInstallation {
   version: string;
   binDir: string;

@@ -345,7 +345,19 @@ pnpm --filter @lsm/desktop tauri:build
 - `pg_dump` sob demanda grava `.dump` em `<backups>/postgres`.
 - `GET /system/tools` detecta PostgreSQL e Docker; nenhum binário é baixado.
 
-## 18. Limitações conhecidas (Fase 7+)
+## 18. Painel web (Fase 15)
+
+- UI servida pelo Engine na porta fixa **4317** (fallback +1..+9); assets em
+  `resources/engine/web` (build) ou `LSM_WEB_DIR`.
+- Senha no primeiro acesso (scrypt em `settings`), sessão em memória por 12h,
+  cookie `lsm_session` (HttpOnly/SameSite=Strict) e CSRF por sessão
+  (`x-csrf-token` + cookie `lsm_csrf`).
+- `POST /auth/setup|login|logout`; Bearer token continua válido para o desktop.
+- Rate limit de 5 logins/min por IP; CSP restritiva nas páginas.
+- WebSocket aceita cookie (logs ao vivo na web).
+- Bind exclusivo em 127.0.0.1; LAN exposta fica no backlog.
+
+## 19. Limitações conhecidas (Fase 7+)
 
 1. **Assinatura e updater automático** — o instalador NSIS é gerado, mas assinatura de código e atualização automática ficam para a Fase 7.
 2. **Sem single-instance do desktop** — abrir o app duas vezes abre duas janelas (o Engine continua único por diretório de dados).
@@ -357,7 +369,7 @@ pnpm --filter @lsm/desktop tauri:build
 8. **Stop no Windows é forçado** — janela cooperativa curta (ADR-011).
 9. **Retenção sem limite global de disco** — hoje é por projeto/dias.
 
-## 19. Dados e privacidade
+## 20. Dados e privacidade
 
 - Banco: `%LOCALAPPDATA%\LocalServerManager\data\manager.sqlite`
 - Logs de processo: `%LOCALAPPDATA%\LocalServerManager\logs\<projectId>\<instanceId>.log`

@@ -1,6 +1,11 @@
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { createEngine } from './engine';
 
-const engine = createEngine();
+const webDir = process.env.LSM_WEB_DIR ?? join(dirname(process.argv[1] ?? ''), 'web');
+const engine = createEngine({
+  webDir: existsSync(join(webDir, 'index.html')) ? webDir : null,
+});
 let stopping = false;
 
 async function shutdown(reason: string, exitCode = 0): Promise<void> {

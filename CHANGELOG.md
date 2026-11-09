@@ -2,6 +2,18 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.16.0] — 2026-11-09
+
+### Fase 15 — Painel web e acesso sem o app
+
+- UI servida pelo Engine no mesmo endereço da API (porta fixa **4317**, fallback automático), com assets copiados para `resources/engine/web` no build.
+- Senha definida no primeiro acesso (scrypt), sessão por cookie `HttpOnly`/`SameSite=Strict` de 12h e **CSRF** por sessão em métodos de escrita.
+- Rate limit de 5 logins/min, CSP restritiva e bind exclusivo em 127.0.0.1.
+- `GET/POST /auth/status|setup|login|logout`; Bearer token do desktop continua válido.
+- WebSocket aceita cookie, então logs/eventos ao vivo funcionam na web.
+- Botão **Abrir no navegador** em Configurações.
+- 2 novos testes de integração; total de 355.
+
 ## [0.15.1] — 2026-11-09
 
 ### Parada graciosa por projeto

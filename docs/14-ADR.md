@@ -2,6 +2,24 @@
 
 Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicionadas no topo com data, contexto, decisão, alternativas e consequências.
 
+## ADR-026 - Web UI servida pelo Engine com sessão e CSRF
+
+**Status:** Aceita (Fase 15)
+
+**Contexto:** o painel só existia dentro do app Tauri; o Engine já pode rodar no logon (tarefa agendada), mas sem interface. Abrir a API para o navegador exigia autenticação que não dependesse do token do shell.
+
+**Decisão:**
+
+1. **UI servida pelo Engine** no mesmo endereço da API (porta fixa **4317**, com fallback para as seguintes). Os assets são copiados para `resources/engine/web` no build; em desenvolvimento vale `LSM_WEB_DIR`.
+2. **Autenticação por senha** definida no primeiro acesso (scrypt + salt em `settings`). Sessão em memória com validade de 12h, cookie `lsm_session` (`HttpOnly`, `SameSite=Strict`).
+3. **CSRF**: token por sessão, também exposto no cookie `lsm_csrf`; qualquer método que altera estado exige `x-csrf-token` batendo com a sessão. Bearer token do desktop continua isento.
+4. **Rate limit** de 5 tentativas de login por minuto por IP.
+5. **CSP** restritiva nas páginas (`default-src 'self'`, sem inline script) e `X-Content-Type-Options: nosniff`.
+6. **Bind exclusivo em 127.0.0.1**; exposição pública continua sendo papel dos túneis. LAN fica no backlog.
+7. **SPA fallback** apenas para rotas sem extensão; `/api/*` desconhecido mantém `ROUTE_NOT_FOUND`.
+
+**Consequências:** o painel abre no navegador e no celular via túnel, com senha, sem depender do app aberto. A sessão cai quando o Engine reinicia (memória). O WebSocket aceita cookie, então logs ao vivo funcionam na web.
+
 ## ADR-025 - Serviços além de Node: Compose e PostgreSQL dedicado
 
 **Status:** Aceita (Fase 14)

@@ -287,3 +287,19 @@ quiser remover tudo. As pastas dos seus projetos nunca são tocadas.
 | Logs sem atualização          | Indicador de conexão (canto superior); reconecte recarregando.                                 |
 | Restauração não aplicada      | É necessário reiniciar o Engine (o app faz automaticamente).                                   |
 | Autostart não aparece         | Recurso disponível apenas no app instalado (não no navegador).                                 |
+
+## 13. Painel web
+
+Com o Engine em execução, a mesma interface pode ser aberta no navegador:
+
+- Endereço: **`http://127.0.0.1:4317`** (se ocupada, o Engine usa 4318, 4319… e o app
+  mostra o endereço correto em **Configurações → Painel web**).
+- No primeiro acesso você define uma **senha** (mínimo 8 caracteres). Ela fica
+  guardada como hash scrypt; a sessão dura 12 horas e expira quando o Engine
+  reinicia.
+- O cookie é `HttpOnly` e `SameSite=Strict`; ações de escrita exigem token CSRF,
+  então um site malicioso não consegue operar o painel.
+- Tudo continua restrito a **127.0.0.1**. Para acessar de outro dispositivo, use
+  um túnel Cloudflare (o painel pedirá a senha).
+- O botão **Abrir no navegador** em Configurações leva direto ao painel.
+- Os logs e eventos ao vivo funcionam na web (WebSocket autenticado por cookie).

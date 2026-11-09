@@ -4,7 +4,7 @@ import { useConnectionStatus, useEngine } from '../providers/engine-provider';
 import type { ImportConfigResult } from '@lsm/contracts';
 import type { BackupInfo } from '../lib/api';
 import { formatBytes, formatDateTime } from '../lib/format';
-import { invokeTauri } from '../lib/tauri';
+import { invokeTauri, openExternal } from '../lib/tauri';
 import { useEngineSettings } from '../lib/hooks';
 import { queryKeys } from '../lib/queries';
 import { PageHeader } from '../components/page';
@@ -216,6 +216,38 @@ export function SettingsPage() {
               <dt className="text-xs uppercase tracking-wide text-zinc-500">Endpoint</dt>
               <dd className="mono mt-0.5 break-all text-xs text-zinc-200">{endpoint.baseUrl}</dd>
             </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-zinc-500">Painel web</dt>
+              <dd className="mt-1 flex flex-wrap items-center gap-2">
+                <span className="mono text-xs text-zinc-300">{endpoint.baseUrl}/</span>
+                <Button
+                  size="sm"
+                  title="Abrir a mesma interface no navegador (pede senha no primeiro acesso)"
+                  onClick={() => {
+                    void openExternal(`${endpoint.baseUrl}/`);
+                  }}
+                >
+                  Abrir no navegador
+                </Button>
+              </dd>
+            </div>
+            {!isTauri ? (
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-zinc-500">Sessão web</dt>
+                <dd className="mt-1">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      void client.logoutWeb().finally(() => {
+                        window.location.reload();
+                      });
+                    }}
+                  >
+                    Sair
+                  </Button>
+                </dd>
+              </div>
+            ) : null}
             <div>
               <dt className="text-xs uppercase tracking-wide text-zinc-500">WebSocket path</dt>
               <dd className="mono mt-0.5 text-xs text-zinc-200">{endpoint.websocketPath}</dd>

@@ -31,6 +31,7 @@ import type {
   UpdateGroupRequest,
   UpdateTunnelRequest,
   CreateTunnelRequest,
+  WebAuthStatus,
 } from '@lsm/contracts';
 
 export interface EngineEndpoint {
@@ -67,6 +68,14 @@ export interface BulkResponse {
   results: BulkProjectResult[];
   levels?: string[][];
   skipped?: Array<{ projectId: string; reason: string }>;
+}
+
+function readCookie(name: string): string | null {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+  const match = new RegExp(`(?:^|;\\s*)${name}=([^;]*)`).exec(document.cookie);
+  return match?.[1] === undefined ? null : decodeURIComponent(match[1]);
 }
 
 export interface BackupInfo {
@@ -308,6 +317,22 @@ export class EngineClient {
     return this.request('POST', `/projects/${encodeURIComponent(id)}/backup`, {});
   }
 
+  getAuthStatus(): Promise<WebAuthStatus> {
+    return this.request('GET', '/auth/status');
+  }
+
+  setupWebAuth(password: string): Promise<WebAuthStatus> {
+    return this.request('POST', '/auth/setup', { password });
+  }
+
+  loginWeb(password: string): Promise<WebAuthStatus> {
+    return this.request('POST', '/auth/login', { password });
+  }
+
+  logoutWeb(): Promise<WebAuthStatus> {
+    return this.request('POST', '/auth/logout', {});
+  }
+
   exportProjects(): Promise<ExportBundle> {
     return this.request('GET', '/projects/export');
   }
@@ -361,11 +386,16 @@ export class EngineClient {
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const headers: Record<string, string> = {
-      authorization: `Bearer ${this.endpoint.token}`,
-    };
+    const headers: Record<string, string> = {};
+    if (this.endpoint.token !== '') {
+      headers.authorization = `Bearer ${this.endpoint.token}`;
+    }
     if (body !== undefined) {
       headers['content-type'] = 'application/json';
+    }
+    const csrf = readCookie('lsm_csrf');
+    if (csrf !== null && method !== 'GET' && method !== 'HEAD') {
+      headers['x-csrf-token'] = csrf;
     }
 
     let response: Response;
@@ -373,6 +403,7 @@ export class EngineClient {
       response = await fetch(`${this.endpoint.baseUrl}/api/v1${path}`, {
         method,
         headers,
+        credentials: 'include',
         body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch (error) {

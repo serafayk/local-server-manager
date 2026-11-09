@@ -1,4 +1,6 @@
 import { basename } from 'node:path';
+import { createReadStream, statSync, type Stats } from 'node:fs';
+import { extname, join, resolve, sep } from 'node:path';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
@@ -41,6 +43,7 @@ import type { Supervisor } from '../supervisor/supervisor';
 import type { DomainService } from '../domains/domain-service';
 import type { TunnelManager } from '../tunnels/tunnel-manager';
 import { extractBearerToken, extractQueryToken, tokensMatch } from './auth';
+import { WebAuth } from './web-auth';
 import {
   isAllowedHostHeader,
   isAllowedOrigin,
@@ -68,6 +71,11 @@ export interface ApiServerOptions {
   logger: Logger;
   metrics: MetricsCollector;
   backups: BackupManager;
+  webAuth: WebAuth;
+  /** Diretório da UI web (null desabilita a hospedagem). */
+  webDir: string | null;
+  /** Porta preferida da API (0 = efêmera). Com Web UI, use uma fixa. */
+  preferredPort?: number;
   engineInfo: () => EngineInfo;
   getSettings: () => EngineSettings;
   updateSettings: (input: unknown) => EngineSettings;
@@ -101,6 +109,70 @@ function queryOf(request: FastifyRequest): Record<string, unknown> {
   return (request.query ?? {}) as Record<string, unknown>;
 }
 
+const WEB_MIME: Readonly<Record<string, string>> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.txt': 'text/plain; charset=utf-8',
+  '.wasm': 'application/wasm',
+};
+
+const WEB_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "font-src 'self' data:",
+  "connect-src 'self' ws: wss:",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+].join('; ');
+
+function safeStatSync(path: string): Stats | null {
+  try {
+    return statSync(path) as Stats;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Com Web UI a porta é fixa (bookmark estável); se estiver ocupada, tenta as
+ * seguintes. Porta 0 continua efêmera para testes e para o desktop sem UI.
+ */
+async function listenWithFallback(instance: FastifyInstance, preferred: number): Promise<void> {
+  if (preferred === 0) {
+    await instance.listen({ host: '127.0.0.1', port: 0 });
+    return;
+  }
+  let lastError: unknown = null;
+  for (let offset = 0; offset < 10; offset += 1) {
+    try {
+      await instance.listen({ host: '127.0.0.1', port: preferred + offset });
+      return;
+    } catch (error) {
+      lastError = error;
+      if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') {
+        throw error;
+      }
+    }
+  }
+  throw lastError ?? new Error('Nenhuma porta disponível para a API local');
+}
+
 /**
  * API local privada: bind apenas em 127.0.0.1, token por execução,
  * validação de Host (DNS rebinding) e envelope único.
@@ -113,6 +185,83 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
   let boundPort = 0;
 
   const registerRoutes = (instance: FastifyInstance): void => {
+    instance.get('/api/v1/auth/status', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        options.webAuth.status(request.headers.cookie),
+        requestIdOf(request),
+      );
+    });
+
+    instance.post('/api/v1/auth/setup', async (request, reply) => {
+      if (options.webAuth.isConfigured()) {
+        return sendFailure(
+          reply,
+          { code: 'VALIDATION_ERROR', message: 'A senha da Web UI já está configurada' },
+          requestIdOf(request),
+          409,
+        );
+      }
+      const body = request.body as { password?: unknown } | null;
+      const password = typeof body?.password === 'string' ? body.password : '';
+      try {
+        options.webAuth.setPassword(password);
+      } catch (error) {
+        return sendFailure(
+          reply,
+          {
+            code: 'VALIDATION_ERROR',
+            message: error instanceof Error ? error.message : 'Senha inválida',
+          },
+          requestIdOf(request),
+          400,
+        );
+      }
+      const session = options.webAuth.createSession();
+      reply.header('set-cookie', [
+        WebAuth.sessionCookie(session.sessionId),
+        WebAuth.csrfCookie(session.csrf),
+      ]);
+      return sendSuccess(
+        reply,
+        { configured: true, authenticated: true, csrf: session.csrf },
+        requestIdOf(request),
+      );
+    });
+
+    instance.post('/api/v1/auth/login', async (request, reply) => {
+      const body = request.body as { password?: unknown } | null;
+      const password = typeof body?.password === 'string' ? body.password : '';
+      const result = options.webAuth.login(request.ip, password);
+      if (!result.ok || result.sessionId === null || result.csrf === null) {
+        return sendFailure(
+          reply,
+          { code: 'UNAUTHORIZED', message: result.error ?? 'Falha no login' },
+          requestIdOf(request),
+          /muitas tentativas/i.test(result.error ?? '') ? 429 : 401,
+        );
+      }
+      reply.header('set-cookie', [
+        WebAuth.sessionCookie(result.sessionId),
+        WebAuth.csrfCookie(result.csrf),
+      ]);
+      return sendSuccess(
+        reply,
+        { configured: true, authenticated: true, csrf: result.csrf },
+        requestIdOf(request),
+      );
+    });
+
+    instance.post('/api/v1/auth/logout', async (request, reply) => {
+      options.webAuth.destroy(options.webAuth.sessionIdFrom(request.headers.cookie));
+      reply.header('set-cookie', WebAuth.clearCookies());
+      return sendSuccess(
+        reply,
+        { configured: options.webAuth.isConfigured(), authenticated: false, csrf: null },
+        requestIdOf(request),
+      );
+    });
+
     instance.get('/api/v1/health', async (request, reply) => {
       const engine = options.engineInfo();
       return sendSuccess(
@@ -606,6 +755,61 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
       },
     );
 
+    const webRoot = options.webDir === null ? null : resolve(options.webDir);
+    instance.get('/*', async (request, reply) => {
+      const rawPath = request.url.split('?')[0] ?? '/';
+      if (rawPath.startsWith('/api/')) {
+        return sendFailure(
+          reply,
+          {
+            code: 'ROUTE_NOT_FOUND',
+            message: `Rota não encontrada: ${request.method} ${rawPath}`,
+          },
+          requestIdOf(request),
+          404,
+        );
+      }
+      if (webRoot === null) {
+        return reply.code(404).type('text/plain; charset=utf-8').send('Web UI não disponível.');
+      }
+      let decoded: string;
+      try {
+        decoded = decodeURIComponent(rawPath);
+      } catch {
+        return reply.code(400).type('text/plain; charset=utf-8').send('Bad Request');
+      }
+      const relative = decoded.replace(/^\/+/, '');
+      const candidate = relative === '' ? webRoot : resolve(webRoot, relative);
+      if (candidate !== webRoot && !candidate.startsWith(webRoot + sep)) {
+        return reply.code(403).type('text/plain; charset=utf-8').send('Forbidden');
+      }
+
+      let file = candidate;
+      let stats = safeStatSync(file);
+      if (stats?.isDirectory()) {
+        file = join(file, 'index.html');
+        stats = safeStatSync(file);
+      }
+      if (!stats?.isFile() && extname(relative) === '') {
+        file = join(webRoot, 'index.html');
+        stats = safeStatSync(file);
+      }
+      if (stats === null || !stats.isFile()) {
+        return reply.code(404).type('text/plain; charset=utf-8').send('Not Found');
+      }
+
+      const ext = extname(file).toLowerCase();
+      reply.header('content-type', WEB_MIME[ext] ?? 'application/octet-stream');
+      reply.header(
+        'cache-control',
+        ext === '.html' ? 'no-store' : 'public, max-age=31536000, immutable',
+      );
+      if (ext === '.html') {
+        reply.header('content-security-policy', WEB_CSP);
+      }
+      return reply.send(createReadStream(file));
+    });
+
     instance.addHook('onRequest', async (request, reply) => {
       if (request.method === 'OPTIONS') {
         return;
@@ -633,20 +837,51 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
           409,
         );
       }
-      const token = extractBearerToken(request.headers.authorization);
-      if (!token || !tokensMatch(options.token, token)) {
+
+      // UI e assets são públicos; a API exige Bearer ou sessão web.
+      if (!request.url.startsWith('/api/v1')) {
+        return;
+      }
+      if (request.url.startsWith('/api/v1/auth/')) {
+        return;
+      }
+
+      const bearer = extractBearerToken(request.headers.authorization);
+      const bearerValid = bearer !== null && tokensMatch(options.token, bearer);
+      const sessionId = options.webAuth.sessionIdFrom(request.headers.cookie);
+
+      if (!bearerValid && sessionId === null) {
         return sendFailure(
           reply,
-          { code: 'UNAUTHORIZED', message: 'Token inválido ou ausente' },
+          { code: 'UNAUTHORIZED', message: 'Sessão ou token inválido' },
           requestIdOf(request),
           401,
         );
       }
+
+      // Sessão de navegador exige CSRF em métodos que alteram estado.
+      if (!bearerValid && sessionId !== null) {
+        const method = request.method.toUpperCase();
+        if (method !== 'GET' && method !== 'HEAD') {
+          const header = request.headers['x-csrf-token'];
+          const expected = options.webAuth.csrfOf(sessionId);
+          if (typeof header !== 'string' || expected === null || !tokensMatch(expected, header)) {
+            return sendFailure(
+              reply,
+              { code: 'UNAUTHORIZED', message: 'CSRF inválido' },
+              requestIdOf(request),
+              403,
+            );
+          }
+        }
+      }
     });
 
-    instance.addHook('onSend', async (_request, reply, payload) => {
+    instance.addHook('onSend', async (request, reply, payload) => {
       reply.header('x-content-type-options', 'nosniff');
-      reply.header('cache-control', 'no-store');
+      if (request.url.startsWith('/api/')) {
+        reply.header('cache-control', 'no-store');
+      }
       return payload;
     });
 
@@ -709,7 +944,9 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
       const token =
         extractQueryToken((request.query as Record<string, unknown> | undefined)?.token) ??
         extractBearerToken(request.headers.authorization);
-      if (!token || !tokensMatch(options.token, token)) {
+      const bearerValid = token !== null && tokensMatch(options.token, token);
+      const sessionId = options.webAuth.sessionIdFrom(request.headers.cookie);
+      if (!bearerValid && sessionId === null) {
         socket.close(1008, 'unauthorized');
         return;
       }
@@ -718,7 +955,7 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
 
     registerRoutes(instance);
 
-    await instance.listen({ host: '127.0.0.1', port: 0 });
+    await listenWithFallback(instance, options.preferredPort ?? 0);
     const address = instance.server.address();
     if (!address || typeof address === 'string') {
       await instance.close();

@@ -14,7 +14,8 @@
 - **Fase 12 — concluída:** stacks com `dependsOn`, readiness por health check, cascata de falhas e stop em ordem inversa.
 - **Fase 13 — concluída:** domínios locais `.lsm`/`.localhost` com proxy em loopback, HTTPS por CA própria e sincronização de hosts em lote.
 - **Fase 14 — concluída:** serviços além de Node — Docker Compose e PostgreSQL dedicado (serviço do Windows, initdb, backup `pg_dump`).
-- **Próxima:** Redis, Engine headless, PgBouncer, Named Pipe/Job Objects, assinatura e updater.
+- **Fase 15 — concluída:** painel web servido pelo Engine, com senha, sessão por cookie, CSRF e porta fixa.
+- **Próxima:** Redis, LAN no painel web, PgBouncer, Named Pipe/Job Objects, assinatura e updater.
 
 Detalhes de execução, comandos e limitações: [15-DEVELOPMENT.md](15-DEVELOPMENT.md), [16-USER-GUIDE.md](16-USER-GUIDE.md) e `CHANGELOG.md`.
 

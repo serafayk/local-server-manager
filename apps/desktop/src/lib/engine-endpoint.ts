@@ -37,6 +37,19 @@ export async function resolveEngineEndpoint(): Promise<EngineEndpoint> {
     return window.__LSM_ENGINE__;
   }
 
+  // Web UI servida pelo próprio Engine: mesma origem e sessão por cookie.
+  try {
+    const status = await fetch('/api/v1/auth/status', {
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (status.ok && (status.headers.get('content-type') ?? '').includes('application/json')) {
+      return { baseUrl: window.location.origin, token: '', websocketPath: '/api/v1/ws' };
+    }
+  } catch {
+    // Sem Engine na mesma origem; tenta a descoberta de desenvolvimento.
+  }
+
   let response: Response;
   try {
     response = await fetch('/__engine', { cache: 'no-store' });

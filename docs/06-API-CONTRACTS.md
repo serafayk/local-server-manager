@@ -48,6 +48,10 @@ gerado pelo Engine. Não retornar stack trace; o stack completo fica no log inte
 | Método | Rota                                  | Finalidade                                              |
 | ------ | ------------------------------------- | ------------------------------------------------------- |
 | GET    | `/api/v1/health`                      | Saúde do Engine                                         |
+| GET    | `/api/v1/auth/status`                 | Senha configurada / sessão atual (público)              |
+| POST   | `/api/v1/auth/setup`                  | Define a senha no primeiro acesso                       |
+| POST   | `/api/v1/auth/login`                  | Cria sessão por cookie                                  |
+| POST   | `/api/v1/auth/logout`                 | Encerra a sessão                                        |
 | GET    | `/api/v1/info`                        | Informações + endpoint da API                           |
 | GET    | `/api/v1/projects`                    | Listar projetos (com runtime)                           |
 | POST   | `/api/v1/projects`                    | Criar projeto                                           |

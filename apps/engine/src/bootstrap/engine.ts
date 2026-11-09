@@ -21,6 +21,7 @@ import { AppError } from '@lsm/shared';
 import { parseEngineSettings } from '@lsm/validation';
 import { createApiServer, type ApiServer } from '../api/server';
 import { generateApiToken } from '../api/auth';
+import { WebAuth } from '../api/web-auth';
 import { EventBus } from '../core/event-bus';
 import { LogManager } from '../log-manager/log-manager';
 import { runLogRetention } from '../log-manager/log-retention';
@@ -53,6 +54,8 @@ export interface CreateEngineOptions {
   domainPorts?: { httpPort?: number; httpsPort?: number };
   /** Arquivo hosts alternativo (testes). */
   hostsFile?: string;
+  /** Diretório da UI web servida pelo Engine (null desabilita). */
+  webDir?: string | null;
 }
 
 export interface Engine {
@@ -117,6 +120,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
   });
   const repositories = createRepositories(db.connection);
   const events = new EventBus(clock, logger);
+  const webAuth = new WebAuth(repositories, clock);
   const logManager = new LogManager({
     logsDir: paths.logsDir,
     clock,
@@ -325,6 +329,9 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
           logger,
           metrics,
           backups,
+          webAuth,
+          webDir: options.webDir ?? null,
+          preferredPort: (options.webDir ?? null) === null ? 0 : 4_317,
           engineInfo: () => engine.info(),
           getSettings: () => engineSettings,
           updateSettings: (input: unknown): EngineSettings => {

@@ -48,7 +48,7 @@ export class EngineSocket {
 
     const url = `${this.endpoint.baseUrl.replace(/^http/, 'ws')}${
       this.endpoint.websocketPath
-    }?token=${encodeURIComponent(this.endpoint.token)}`;
+    }${this.endpoint.token === '' ? '' : `?token=${encodeURIComponent(this.endpoint.token)}`}`;
 
     let socket: WebSocket;
     try {
