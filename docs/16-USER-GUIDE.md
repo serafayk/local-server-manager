@@ -154,6 +154,43 @@ motivo e a porta esperada. WebSocket/HMR passam pelo proxy normalmente.
 > não esbarrar em bloqueios de host do Vite). O host original vai em
 > `x-forwarded-host`.
 
+### Serviços: Docker Compose e PostgreSQL dedicado
+
+Em **Novo projeto → Tipo de projeto** você escolhe como o serviço roda:
+
+**Aplicação Node.js** — comportamento normal (script/executável).
+
+**Processo genérico** — qualquer executável com argumentos (PHP, Python, .exe),
+sem shell. É o tipo ideal para um robô/worker: informe o executável
+(`C:\laragon\bin\php\php.exe`) e os argumentos
+(`bin\robot --config=...`).
+
+**Docker Compose** — informe o arquivo (`docker-compose.yml`) e, opcionalmente,
+o nome do projeto (`-p`) e o executável do Docker. O LSM roda
+`docker compose up` anexado: os logs aparecem ao vivo e um container que morre
+derruba a stack, como um crash. Ao parar, executa `down --remove-orphans` para
+não deixar containers órfãos. Requer Docker Desktop instalado e em execução.
+
+**PostgreSQL dedicado** — o LSM cria uma instância só sua, sem tocar no
+PostgreSQL que já está na porta 5432:
+
+- Escolha a instalação detectada (ex.: 16). Se deixar automático, usa a maior.
+- Porta padrão **55432**, usuário `postgres` e senha (o botão **Gerar** cria uma
+  forte; vazio também gera).
+- No primeiro start o LSM roda `initdb` e registra a instância como **serviço do
+  Windows** (conta NetworkService), iniciando/parando pelo painel.
+- O detalhe do projeto mostra a URL de conexão (copiar inclui a senha) e o botão
+  **Backup**, que gera um `.dump` com `pg_dump`.
+- O data dir fica em `%LOCALAPPDATA%\LocalServerManager\postgres\<id>` e não é
+  apagado ao remover o projeto.
+
+> Criar o serviço do PostgreSQL exige administrador. Com o UAC desabilitado
+> funciona direto; com UAC habilitado, abra o Local Server Manager como
+> administrador na primeira criação.
+
+Use **Dependências** para amarrar a ordem: `postgres` → `api` → `web`, com
+critério "pronto" quando houver health check.
+
 ### Perfil de memória
 
 Em **Execução → Perfil de memória** você aplica `NODE_OPTIONS` ao projeto

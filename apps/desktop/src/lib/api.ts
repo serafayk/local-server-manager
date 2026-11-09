@@ -21,8 +21,11 @@ import type {
   ProjectGroup,
   ProjectInstance,
   ProjectSummary,
+  PostgresBackupResult,
+  PostgresConnectionInfo,
   RuntimeSnapshot,
   ScanRootResponse,
+  SystemTools,
   TunnelStatus,
   TunnelSummary,
   UpdateGroupRequest,
@@ -291,6 +294,18 @@ export class EngineClient {
 
   trustDomainCa(): Promise<DomainsStatus> {
     return this.request('POST', '/domains/ca/trust', {});
+  }
+
+  getSystemTools(): Promise<SystemTools> {
+    return this.request('GET', '/system/tools');
+  }
+
+  getPostgresInfo(id: string): Promise<PostgresConnectionInfo> {
+    return this.request('GET', `/projects/${encodeURIComponent(id)}/postgres`);
+  }
+
+  backupPostgres(id: string): Promise<PostgresBackupResult> {
+    return this.request('POST', `/projects/${encodeURIComponent(id)}/backup`, {});
   }
 
   exportProjects(): Promise<ExportBundle> {

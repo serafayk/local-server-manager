@@ -2,6 +2,19 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.15.0] — 2026-11-09
+
+### Fase 14 — Serviços além de Node
+
+- `kind` (`node`/`process`/`compose`/`postgres`) com configuração específica; migração v6 (`kind`, `compose_json`, `postgres_json`).
+- **Docker Compose**: `docker compose up` anexado com logs e crash no supervisor; `down --remove-orphans` ao parar; executável e arquivo configuráveis.
+- **PostgreSQL dedicado**: data dir próprio, `initdb` automático e instância como **serviço do Windows** (NetworkService) — necessário porque `postgres.exe` recusa token de administrador (UAC desabilitado). Start/stop via `sc`, monitor de estado e logs de `postgresql.log`.
+- **Backup**: `POST /projects/:id/backup` gera `.dump` com `pg_dump`.
+- **Detecção**: `GET /system/tools` lista PostgreSQL instalado e estado do Docker; nenhum download automático.
+- Excluir projeto remove o serviço e preserva o data dir.
+- UI: tipo no cadastro com painéis de Compose/Postgres, conexão + backup no detalhe.
+- 18 novos testes; total de 351.
+
 ## [0.14.0] — 2026-11-08
 
 ### Fase 13 — Domínios locais

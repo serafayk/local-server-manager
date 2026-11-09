@@ -25,6 +25,7 @@ export interface SupervisorDeps {
   logger: Logger;
   processManager: ProcessManager;
   staticHost: StaticHostManager;
+  postgresRoot: string;
   batchConcurrency: number;
 }
 
@@ -60,6 +61,7 @@ export class Supervisor {
         logger: this.deps.logger,
         processManager: this.deps.processManager,
         staticHost: this.deps.staticHost,
+        postgresRoot: this.deps.postgresRoot,
       }),
     );
   }

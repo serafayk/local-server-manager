@@ -125,6 +125,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
   });
   const processManager = new ProcessManager(logger);
   const staticHost = new StaticHostManager();
+  const postgresRoot = join(paths.root, 'postgres');
   const supervisor = new Supervisor({
     repositories,
     logManager,
@@ -133,6 +134,7 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     logger,
     processManager,
     staticHost,
+    postgresRoot,
     batchConcurrency: DEFAULT_ENGINE_SETTINGS.batchConcurrency,
   });
   const groups = new GroupService({ repositories, clock, logger });
@@ -174,6 +176,8 @@ export function createEngine(options: CreateEngineOptions = {}): Engine {
     events,
     clock,
     logger,
+    postgresRoot,
+    postgresBackupsDir: join(paths.backupsDir, 'postgres'),
   });
   const metrics = new MetricsCollector({
     clock,

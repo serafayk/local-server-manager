@@ -38,9 +38,9 @@ Construir uma experiência semelhante ao Laragon, mas dedicada ao gerenciamento 
 
 ## Estado atual
 
-**Fases 0–13 concluídas** (2026-11-08). O Engine gerencia projetos Node.js com supervisor próprio, recovery, reconciliação, logs, API local, métricas por árvore, perfis de memória, túneis Cloudflare, execução direta/hospedagem estática, stacks com dependências e domínios locais com HTTPS. O desktop Tauri tem instalador, autostart, backup/restauração e configuração assistida.
+**Fases 0–14 concluídas** (2026-11-09). O Engine gerencia projetos Node.js com supervisor próprio, recovery, reconciliação, logs, API local, métricas por árvore, perfis de memória, túneis Cloudflare, execução direta/hospedagem estática, stacks com dependências, domínios locais com HTTPS e serviços (Docker Compose e PostgreSQL dedicado). O desktop Tauri tem instalador, autostart, backup/restauração e configuração assistida.
 
-Backlog: serviços além de Node (Compose/Postgres/Redis), Engine headless, PgBouncer, Named Pipe/Job Objects, assinatura de código e updater. Consulte [docs/15-DEVELOPMENT.md](docs/15-DEVELOPMENT.md), [docs/16-USER-GUIDE.md](docs/16-USER-GUIDE.md) e `CHANGELOG.md`.
+Backlog: Redis, Engine headless, PgBouncer, Named Pipe/Job Objects, assinatura de código e updater. Consulte [docs/15-DEVELOPMENT.md](docs/15-DEVELOPMENT.md), [docs/16-USER-GUIDE.md](docs/16-USER-GUIDE.md) e `CHANGELOG.md`.
 
 ## Stack proposta
 

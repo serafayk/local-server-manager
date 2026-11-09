@@ -186,10 +186,24 @@ CREATE INDEX idx_domains_project ON domains (project_id);
 `,
 };
 
+export const MIGRATION_006: Migration = {
+  version: 6,
+  name: 'service-kinds',
+  sql: `
+ALTER TABLE projects ADD COLUMN kind TEXT NOT NULL DEFAULT 'node'
+  CHECK (kind IN ('node', 'process', 'compose', 'postgres'));
+
+ALTER TABLE projects ADD COLUMN compose_json TEXT;
+
+ALTER TABLE projects ADD COLUMN postgres_json TEXT;
+`,
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   MIGRATION_001,
   MIGRATION_002,
   MIGRATION_003,
   MIGRATION_004,
   MIGRATION_005,
+  MIGRATION_006,
 ];

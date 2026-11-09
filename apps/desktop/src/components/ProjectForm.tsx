@@ -10,6 +10,7 @@ import {
   buildUpdateBody,
   emptyFormState,
   formStateFromConfig,
+  generatePostgresPassword,
   MEMORY_PROFILES,
   memoryProfileFromState,
   parseArgsText,
@@ -20,7 +21,12 @@ import {
   type ProjectFormState,
 } from '../lib/payload';
 import { queryKeys } from '../lib/queries';
-import { useGroupsQuery, useNodeVersionsQuery, useProjectsQuery } from '../lib/hooks';
+import {
+  useGroupsQuery,
+  useNodeVersionsQuery,
+  useProjectsQuery,
+  useSystemToolsQuery,
+} from '../lib/hooks';
 import { isTauriRuntime, pickFolder } from '../lib/tauri';
 import { useEngine } from '../providers/engine-provider';
 import {
@@ -81,6 +87,7 @@ export function ProjectForm({
   const groupsQuery = useGroupsQuery();
   const nodeVersionsQuery = useNodeVersionsQuery();
   const projectsQuery = useProjectsQuery();
+  const toolsQuery = useSystemToolsQuery();
   const detectedNodes = nodeVersionsQuery.data ?? [];
   const dependencyOptions = (projectsQuery.data ?? []).filter(
     (summary) => summary.config.id !== project?.id,
@@ -323,6 +330,29 @@ export function ProjectForm({
           </Field>
 
           <Field
+            label="Tipo de projeto"
+            htmlFor="project-kind"
+            hint="Define como o Engine inicia e monitora o serviço."
+          >
+            <Select
+              id="project-kind"
+              value={state.kind}
+              onChange={(event) => {
+                const kind = event.target.value as ProjectFormState['kind'];
+                update('kind', kind);
+                if (kind !== 'node') {
+                  update('mode', 'custom');
+                }
+              }}
+            >
+              <option value="node">Aplicação Node.js</option>
+              <option value="process">Processo genérico (PHP, Python, .exe)</option>
+              <option value="compose">Docker Compose</option>
+              <option value="postgres">PostgreSQL dedicado</option>
+            </Select>
+          </Field>
+
+          <Field
             label="Diretório do projeto"
             htmlFor="project-directory"
             hint="Caminho absoluto. Escolher a pasta já dispara a detecção."
@@ -412,212 +442,370 @@ export function ProjectForm({
 
       {step === 1 ? (
         <div className="space-y-4">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <button
-              type="button"
-              disabled={isEdit}
-              onClick={() => update('mode', 'script')}
-              className={[
-                'rounded-lg border p-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50',
-                state.mode === 'script'
-                  ? 'border-emerald-700 bg-emerald-950/30 text-emerald-100'
-                  : 'border-zinc-800 text-zinc-300 hover:border-zinc-700',
-              ].join(' ')}
-            >
-              <span className="block font-medium">Script do package.json</span>
-              <span className="block text-xs text-zinc-500">
-                O Engine resolve o entrypoint sem shell
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => update('mode', 'custom')}
-              className={[
-                'rounded-lg border p-3 text-left text-sm',
-                state.mode === 'custom'
-                  ? 'border-emerald-700 bg-emerald-950/30 text-emerald-100'
-                  : 'border-zinc-800 text-zinc-300 hover:border-zinc-700',
-              ].join(' ')}
-            >
-              <span className="block font-medium">Comando personalizado</span>
-              <span className="block text-xs text-zinc-500">Executável + argumentos</span>
-            </button>
-          </div>
-
-          {state.mode === 'script' ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Package manager" htmlFor="project-pm">
-                <Select
-                  id="project-pm"
-                  value={state.packageManager}
-                  onChange={(event) =>
-                    update(
-                      'packageManager',
-                      event.target.value as ProjectFormState['packageManager'],
-                    )
-                  }
-                >
-                  <option value="npm">npm</option>
-                  <option value="pnpm">pnpm</option>
-                  <option value="yarn">yarn</option>
-                  <option value="bun">bun</option>
-                </Select>
-              </Field>
-              <Field label="Script" htmlFor="project-script">
+          {state.kind === 'compose' ? (
+            <div className="space-y-3 rounded-lg border border-zinc-800 p-3">
+              <Field
+                label="Arquivo Compose"
+                htmlFor="compose-file"
+                hint="Relativo ao diretório do projeto (ou absoluto)."
+              >
                 <Input
-                  id="project-script"
-                  value={state.script}
-                  onChange={(event) => update('script', event.target.value)}
-                  placeholder="dev"
+                  id="compose-file"
+                  value={state.composeFile}
+                  onChange={(event) => update('composeFile', event.target.value)}
+                  placeholder="docker-compose.yml"
                   className="mono"
                 />
               </Field>
-              <p className="text-[11px] text-zinc-500 sm:col-span-2">
-                Use <span className="mono">start</span> para execução supervisionada sem watcher. Se
-                o script exigir build prévio (ex.: Next.js), prefira{' '}
-                <span className="mono">dev</span> ou rode o build antes.
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field
+                  label="Nome do projeto (-p)"
+                  htmlFor="compose-project"
+                  hint="Opcional; separa stacks no Docker."
+                >
+                  <Input
+                    id="compose-project"
+                    value={state.composeProject}
+                    onChange={(event) => update('composeProject', event.target.value)}
+                    placeholder="uai"
+                    className="mono"
+                  />
+                </Field>
+                <Field
+                  label="Executável do Docker"
+                  htmlFor="compose-docker"
+                  hint="Vazio usa `docker` do PATH."
+                >
+                  <Input
+                    id="compose-docker"
+                    value={state.composeDocker}
+                    onChange={(event) => update('composeDocker', event.target.value)}
+                    placeholder="C:\\Program Files\\Docker\\docker.exe"
+                    className="mono"
+                  />
+                </Field>
+              </div>
+              <p className="text-[11px] text-zinc-500">
+                O Engine roda <span className="mono">docker compose up</span> anexado (logs ao vivo)
+                e executa <span className="mono">down --remove-orphans</span> ao parar. Requer
+                Docker Desktop instalado e rodando.
               </p>
+              {toolsQuery.data?.docker.available === false ? (
+                <p className="rounded border border-amber-900/60 bg-amber-950/30 px-2 py-1.5 text-[11px] text-amber-300">
+                  Docker não detectado: {toolsQuery.data.docker.error ?? 'instale o Docker Desktop'}
+                  .
+                </p>
+              ) : null}
             </div>
-          ) : (
-            <>
+          ) : state.kind === 'postgres' ? (
+            <div className="space-y-3 rounded-lg border border-zinc-800 p-3">
               <Field
-                label="Node instalado"
-                htmlFor="project-node"
-                hint="Preenche o caminho absoluto do node.exe (NVM, sistema ou Engine)."
+                label="Instalação do PostgreSQL"
+                htmlFor="pg-bin"
+                hint="Detectada em Program Files\\PostgreSQL; vazio escolhe a maior versão."
               >
                 <Select
-                  id="project-node"
-                  value={currentNodePath}
+                  id="pg-bin"
+                  value={state.pgBinDir}
                   onChange={(event) => {
-                    if (event.target.value !== '') {
-                      update('executable', event.target.value);
+                    const binDir = event.target.value;
+                    const install = (toolsQuery.data?.postgres ?? []).find(
+                      (item) => item.binDir === binDir,
+                    );
+                    update('pgBinDir', binDir);
+                    if (install) {
+                      update('pgVersion', install.version);
                     }
                   }}
                 >
-                  <option value="">Personalizado (use o campo abaixo)</option>
-                  {detectedNodes.map((node) => (
-                    <option key={node.executable} value={node.executable}>
-                      v{node.version} · {node.source}
+                  <option value="">Detectar automaticamente</option>
+                  {(toolsQuery.data?.postgres ?? []).map((install) => (
+                    <option key={install.binDir} value={install.binDir}>
+                      {install.version} — {install.binDir}
                     </option>
                   ))}
                 </Select>
               </Field>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="Porta" htmlFor="pg-port" hint="Padrão 55432.">
+                  <Input
+                    id="pg-port"
+                    value={state.pgPort}
+                    onChange={(event) => update('pgPort', event.target.value)}
+                    placeholder="55432"
+                    inputMode="numeric"
+                  />
+                </Field>
+                <Field label="Usuário" htmlFor="pg-user">
+                  <Input
+                    id="pg-user"
+                    value={state.pgUsername}
+                    onChange={(event) => update('pgUsername', event.target.value)}
+                    className="mono"
+                  />
+                </Field>
+                <Field label="Senha" htmlFor="pg-password" hint="Vazio gera uma senha forte.">
+                  <div className="flex gap-2">
+                    <Input
+                      id="pg-password"
+                      value={state.pgPassword}
+                      onChange={(event) => update('pgPassword', event.target.value)}
+                      className="mono"
+                      autoComplete="new-password"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      title="Gerar senha aleatória"
+                      onClick={() => update('pgPassword', generatePostgresPassword())}
+                    >
+                      Gerar
+                    </Button>
+                  </div>
+                </Field>
+              </div>
+
               <Field
-                label="Executável"
-                htmlFor="project-executable"
-                hint="Ex.: node, npm, C:\Program Files\nodejs\node.exe"
+                label="Data dir"
+                htmlFor="pg-datadir"
+                hint="Vazio usa a pasta de dados do Engine (recomendado)."
               >
                 <Input
-                  id="project-executable"
-                  value={state.executable}
-                  onChange={(event) => update('executable', event.target.value)}
-                  placeholder="node"
+                  id="pg-datadir"
+                  value={state.pgDataDir}
+                  onChange={(event) => update('pgDataDir', event.target.value)}
+                  placeholder="Automático"
                   className="mono"
                 />
               </Field>
-              <Field
-                label="Argumentos"
-                htmlFor="project-args"
-                hint="Um argumento por linha. Espaços dentro da linha são preservados."
-              >
-                <Textarea
-                  id="project-args"
-                  rows={3}
-                  value={state.argsText}
-                  onChange={(event) => update('argsText', event.target.value)}
-                  placeholder={'server.js\n--port\n3000'}
-                />
-              </Field>
-            </>
-          )}
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field
-              label="Porta"
-              htmlFor="project-port"
-              hint="Usada para avisar conflito antes de iniciar e para o health check."
-            >
-              <Input
-                id="project-port"
-                value={state.port}
-                onChange={(event) => update('port', event.target.value)}
-                placeholder="3000"
-                inputMode="numeric"
-              />
-            </Field>
-            <Field
-              label="Ordem de inicialização"
-              htmlFor="project-order"
-              hint="Menor inicia primeiro no boot."
-            >
-              <Input
-                id="project-order"
-                value={state.startupOrder}
-                onChange={(event) => update('startupOrder', event.target.value)}
-                inputMode="numeric"
-              />
-            </Field>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                Variáveis de ambiente
-              </span>
-              <Button
-                size="sm"
-                onClick={() =>
-                  setState((previous) => ({
-                    ...previous,
-                    environment: [...previous.environment, { key: '', value: '' }],
-                  }))
-                }
-              >
-                Adicionar
-              </Button>
+              <p className="text-[11px] text-zinc-500">
+                A instância é dedicada: roda como serviço do Windows (NetworkService), com initdb
+                automático no primeiro start. O PostgreSQL já instalado em 5432 não é alterado. O
+                backup fica disponível no detalhe do projeto.
+              </p>
             </div>
-            {state.environment.length === 0 ? (
-              <p className="text-xs text-zinc-500">Nenhuma variável configurada.</p>
-            ) : (
-              state.environment.map((row, index) => (
-                <div key={index} className="flex gap-2">
+          ) : (
+            <>
+              {state.kind === 'node' ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    disabled={isEdit}
+                    onClick={() => update('mode', 'script')}
+                    className={[
+                      'rounded-lg border p-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50',
+                      state.mode === 'script'
+                        ? 'border-emerald-700 bg-emerald-950/30 text-emerald-100'
+                        : 'border-zinc-800 text-zinc-300 hover:border-zinc-700',
+                    ].join(' ')}
+                  >
+                    <span className="block font-medium">Script do package.json</span>
+                    <span className="block text-xs text-zinc-500">
+                      O Engine resolve o entrypoint sem shell
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => update('mode', 'custom')}
+                    className={[
+                      'rounded-lg border p-3 text-left text-sm',
+                      state.mode === 'custom'
+                        ? 'border-emerald-700 bg-emerald-950/30 text-emerald-100'
+                        : 'border-zinc-800 text-zinc-300 hover:border-zinc-700',
+                    ].join(' ')}
+                  >
+                    <span className="block font-medium">Comando personalizado</span>
+                    <span className="block text-xs text-zinc-500">Executável + argumentos</span>
+                  </button>
+                </div>
+              ) : (
+                <p className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400">
+                  Informe o executável e os argumentos do processo. Ex.:{' '}
+                  <span className="mono">C:\laragon\bin\php\php.exe</span> com{' '}
+                  <span className="mono">bin\robot --config=...</span>
+                </p>
+              )}
+
+              {state.mode === 'script' ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Package manager" htmlFor="project-pm">
+                    <Select
+                      id="project-pm"
+                      value={state.packageManager}
+                      onChange={(event) =>
+                        update(
+                          'packageManager',
+                          event.target.value as ProjectFormState['packageManager'],
+                        )
+                      }
+                    >
+                      <option value="npm">npm</option>
+                      <option value="pnpm">pnpm</option>
+                      <option value="yarn">yarn</option>
+                      <option value="bun">bun</option>
+                    </Select>
+                  </Field>
+                  <Field label="Script" htmlFor="project-script">
+                    <Input
+                      id="project-script"
+                      value={state.script}
+                      onChange={(event) => update('script', event.target.value)}
+                      placeholder="dev"
+                      className="mono"
+                    />
+                  </Field>
+                  <p className="text-[11px] text-zinc-500 sm:col-span-2">
+                    Use <span className="mono">start</span> para execução supervisionada sem
+                    watcher. Se o script exigir build prévio (ex.: Next.js), prefira{' '}
+                    <span className="mono">dev</span> ou rode o build antes.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <Field
+                    label="Node instalado"
+                    htmlFor="project-node"
+                    hint="Preenche o caminho absoluto do node.exe (NVM, sistema ou Engine)."
+                  >
+                    <Select
+                      id="project-node"
+                      value={currentNodePath}
+                      onChange={(event) => {
+                        if (event.target.value !== '') {
+                          update('executable', event.target.value);
+                        }
+                      }}
+                    >
+                      <option value="">Personalizado (use o campo abaixo)</option>
+                      {detectedNodes.map((node) => (
+                        <option key={node.executable} value={node.executable}>
+                          v{node.version} · {node.source}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field
+                    label="Executável"
+                    htmlFor="project-executable"
+                    hint="Ex.: node, npm, C:\Program Files\nodejs\node.exe"
+                  >
+                    <Input
+                      id="project-executable"
+                      value={state.executable}
+                      onChange={(event) => update('executable', event.target.value)}
+                      placeholder="node"
+                      className="mono"
+                    />
+                  </Field>
+                  <Field
+                    label="Argumentos"
+                    htmlFor="project-args"
+                    hint="Um argumento por linha. Espaços dentro da linha são preservados."
+                  >
+                    <Textarea
+                      id="project-args"
+                      rows={3}
+                      value={state.argsText}
+                      onChange={(event) => update('argsText', event.target.value)}
+                      placeholder={'server.js\n--port\n3000'}
+                    />
+                  </Field>
+                </>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field
+                  label="Porta"
+                  htmlFor="project-port"
+                  hint="Usada para avisar conflito antes de iniciar e para o health check."
+                >
                   <Input
-                    aria-label={`Chave da variável ${index + 1}`}
-                    value={row.key}
-                    onChange={(event) => updateEnvironment(index, { key: event.target.value })}
-                    placeholder="NODE_ENV"
-                    className="mono"
+                    id="project-port"
+                    value={state.port}
+                    onChange={(event) => update('port', event.target.value)}
+                    placeholder="3000"
+                    inputMode="numeric"
                   />
+                </Field>
+                <Field
+                  label="Ordem de inicialização"
+                  htmlFor="project-order"
+                  hint="Menor inicia primeiro no boot."
+                >
                   <Input
-                    aria-label={`Valor da variável ${index + 1}`}
-                    value={row.value}
-                    onChange={(event) => updateEnvironment(index, { value: event.target.value })}
-                    placeholder="development"
-                    className="mono"
+                    id="project-order"
+                    value={state.startupOrder}
+                    onChange={(event) => update('startupOrder', event.target.value)}
+                    inputMode="numeric"
                   />
+                </Field>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                    Variáveis de ambiente
+                  </span>
                   <Button
-                    variant="ghost"
-                    aria-label="Remover variável"
+                    size="sm"
                     onClick={() =>
                       setState((previous) => ({
                         ...previous,
-                        environment: previous.environment.filter(
-                          (_, rowIndex) => rowIndex !== index,
-                        ),
+                        environment: [...previous.environment, { key: '', value: '' }],
                       }))
                     }
                   >
-                    ✕
+                    Adicionar
                   </Button>
                 </div>
-              ))
-            )}
-          </div>
+                {state.environment.length === 0 ? (
+                  <p className="text-xs text-zinc-500">Nenhuma variável configurada.</p>
+                ) : (
+                  state.environment.map((row, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Input
+                        aria-label={`Chave da variável ${index + 1}`}
+                        value={row.key}
+                        onChange={(event) => updateEnvironment(index, { key: event.target.value })}
+                        placeholder="NODE_ENV"
+                        className="mono"
+                      />
+                      <Input
+                        aria-label={`Valor da variável ${index + 1}`}
+                        value={row.value}
+                        onChange={(event) =>
+                          updateEnvironment(index, { value: event.target.value })
+                        }
+                        placeholder="development"
+                        className="mono"
+                      />
+                      <Button
+                        variant="ghost"
+                        aria-label="Remover variável"
+                        onClick={() =>
+                          setState((previous) => ({
+                            ...previous,
+                            environment: previous.environment.filter(
+                              (_, rowIndex) => rowIndex !== index,
+                            ),
+                          }))
+                        }
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
 
-          <div className="rounded-lg border border-zinc-800 bg-black/40 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-zinc-500">Comando final</p>
-            <p className="mono mt-1 break-all text-xs text-zinc-200">{commandPreview}</p>
-          </div>
+              <div className="rounded-lg border border-zinc-800 bg-black/40 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">Comando final</p>
+                <p className="mono mt-1 break-all text-xs text-zinc-200">{commandPreview}</p>
+              </div>
+            </>
+          )}
         </div>
       ) : null}
 
@@ -644,62 +832,64 @@ export function ProjectForm({
             />
           </div>
 
-          <div className="rounded-lg border border-zinc-800 p-3">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field
-                label="Modo de execução"
-                htmlFor="project-launch"
-                hint="Direta evita pnpm, cmd.exe e o CLI do tsx/next/vite."
-              >
-                <Select
-                  id="project-launch"
-                  value={state.launchMode}
-                  onChange={(event) =>
-                    update('launchMode', event.target.value as ProjectFormState['launchMode'])
-                  }
-                >
-                  <option value="auto">Automática (recomendado)</option>
-                  <option value="direct">Direta (sem wrappers)</option>
-                  <option value="wrapper">Com wrapper (pnpm/npm)</option>
-                </Select>
-              </Field>
-              <Field
-                label="Modo de serviço"
-                htmlFor="project-serve"
-                hint="Estático serve o build pelo Engine, sem processo Node."
-              >
-                <Select
-                  id="project-serve"
-                  value={state.serveMode}
-                  onChange={(event) =>
-                    update('serveMode', event.target.value as ProjectFormState['serveMode'])
-                  }
-                >
-                  <option value="process">Processo (Node)</option>
-                  <option value="static">Estático (dist/build)</option>
-                </Select>
-              </Field>
-              {state.serveMode === 'static' ? (
+          {state.kind === 'node' ? (
+            <div className="rounded-lg border border-zinc-800 p-3">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <Field
-                  label="Diretório de saída"
-                  htmlFor="project-output"
-                  hint="Relativo ao projeto; vazio detecta dist/build/out."
+                  label="Modo de execução"
+                  htmlFor="project-launch"
+                  hint="Direta evita pnpm, cmd.exe e o CLI do tsx/next/vite."
                 >
-                  <Input
-                    id="project-output"
-                    value={state.outputDir}
-                    onChange={(event) => update('outputDir', event.target.value)}
-                    placeholder="dist"
-                    className="mono"
-                  />
+                  <Select
+                    id="project-launch"
+                    value={state.launchMode}
+                    onChange={(event) =>
+                      update('launchMode', event.target.value as ProjectFormState['launchMode'])
+                    }
+                  >
+                    <option value="auto">Automática (recomendado)</option>
+                    <option value="direct">Direta (sem wrappers)</option>
+                    <option value="wrapper">Com wrapper (pnpm/npm)</option>
+                  </Select>
                 </Field>
-              ) : null}
+                <Field
+                  label="Modo de serviço"
+                  htmlFor="project-serve"
+                  hint="Estático serve o build pelo Engine, sem processo Node."
+                >
+                  <Select
+                    id="project-serve"
+                    value={state.serveMode}
+                    onChange={(event) =>
+                      update('serveMode', event.target.value as ProjectFormState['serveMode'])
+                    }
+                  >
+                    <option value="process">Processo (Node)</option>
+                    <option value="static">Estático (dist/build)</option>
+                  </Select>
+                </Field>
+                {state.serveMode === 'static' ? (
+                  <Field
+                    label="Diretório de saída"
+                    htmlFor="project-output"
+                    hint="Relativo ao projeto; vazio detecta dist/build/out."
+                  >
+                    <Input
+                      id="project-output"
+                      value={state.outputDir}
+                      onChange={(event) => update('outputDir', event.target.value)}
+                      placeholder="dist"
+                      className="mono"
+                    />
+                  </Field>
+                ) : null}
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-600">
+                Execução direta remove ~2 processos de wrapper por projeto. O modo estático atende
+                SPAs construídas (não faz SSR).
+              </p>
             </div>
-            <p className="mt-2 text-[11px] text-zinc-600">
-              Execução direta remove ~2 processos de wrapper por projeto. O modo estático atende
-              SPAs construídas (não faz SSR).
-            </p>
-          </div>
+          ) : null}
 
           <div className="rounded-lg border border-zinc-800 p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -772,80 +962,82 @@ export function ProjectForm({
             )}
           </div>
 
-          <div className="rounded-lg border border-zinc-800 p-3">
-            <div className="flex flex-wrap items-end gap-3">
-              <Field
-                label="Perfil de memória"
-                htmlFor="project-memory-profile"
-                hint="Define NODE_OPTIONS para o projeto e para os processos filhos."
-                className="min-w-[280px] flex-1"
-              >
-                <Select
-                  id="project-memory-profile"
-                  value={memory.profile}
-                  onChange={(event) => {
-                    const profile = event.target.value as MemoryProfile;
-                    setState((previous) =>
-                      applyMemoryProfile(previous, profile, {
-                        heapMb: memory.heapMb ?? 256,
-                        semiSpaceMb: memory.semiSpaceMb ?? 8,
-                      }),
-                    );
-                  }}
+          {state.kind === 'node' ? (
+            <div className="rounded-lg border border-zinc-800 p-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <Field
+                  label="Perfil de memória"
+                  htmlFor="project-memory-profile"
+                  hint="Define NODE_OPTIONS para o projeto e para os processos filhos."
+                  className="min-w-[280px] flex-1"
                 >
-                  {MEMORY_PROFILES.map((preset) => (
-                    <option key={preset.value} value={preset.value}>
-                      {preset.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              {memory.profile === 'custom' ? (
-                <>
-                  <Field label="Heap (MB)" htmlFor="project-memory-heap" className="w-32">
-                    <Input
-                      id="project-memory-heap"
-                      value={memory.heapMb ?? 256}
-                      inputMode="numeric"
-                      onChange={(event) =>
-                        setState((previous) =>
-                          applyMemoryProfile(previous, 'custom', {
-                            heapMb: Number.parseInt(event.target.value, 10) || null,
-                            semiSpaceMb: memory.semiSpaceMb ?? 8,
-                          }),
-                        )
-                      }
-                    />
-                  </Field>
-                  <Field label="Semi-espaço (MB)" htmlFor="project-memory-semi" className="w-36">
-                    <Input
-                      id="project-memory-semi"
-                      value={memory.semiSpaceMb ?? 8}
-                      inputMode="numeric"
-                      onChange={(event) =>
-                        setState((previous) =>
-                          applyMemoryProfile(previous, 'custom', {
-                            heapMb: memory.heapMb ?? 256,
-                            semiSpaceMb: Number.parseInt(event.target.value, 10) || null,
-                          }),
-                        )
-                      }
-                    />
-                  </Field>
-                </>
-              ) : null}
+                  <Select
+                    id="project-memory-profile"
+                    value={memory.profile}
+                    onChange={(event) => {
+                      const profile = event.target.value as MemoryProfile;
+                      setState((previous) =>
+                        applyMemoryProfile(previous, profile, {
+                          heapMb: memory.heapMb ?? 256,
+                          semiSpaceMb: memory.semiSpaceMb ?? 8,
+                        }),
+                      );
+                    }}
+                  >
+                    {MEMORY_PROFILES.map((preset) => (
+                      <option key={preset.value} value={preset.value}>
+                        {preset.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                {memory.profile === 'custom' ? (
+                  <>
+                    <Field label="Heap (MB)" htmlFor="project-memory-heap" className="w-32">
+                      <Input
+                        id="project-memory-heap"
+                        value={memory.heapMb ?? 256}
+                        inputMode="numeric"
+                        onChange={(event) =>
+                          setState((previous) =>
+                            applyMemoryProfile(previous, 'custom', {
+                              heapMb: Number.parseInt(event.target.value, 10) || null,
+                              semiSpaceMb: memory.semiSpaceMb ?? 8,
+                            }),
+                          )
+                        }
+                      />
+                    </Field>
+                    <Field label="Semi-espaço (MB)" htmlFor="project-memory-semi" className="w-36">
+                      <Input
+                        id="project-memory-semi"
+                        value={memory.semiSpaceMb ?? 8}
+                        inputMode="numeric"
+                        onChange={(event) =>
+                          setState((previous) =>
+                            applyMemoryProfile(previous, 'custom', {
+                              heapMb: memory.heapMb ?? 256,
+                              semiSpaceMb: Number.parseInt(event.target.value, 10) || null,
+                            }),
+                          )
+                        }
+                      />
+                    </Field>
+                  </>
+                ) : null}
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-500">
+                NODE_OPTIONS:{' '}
+                <span className="mono text-zinc-300">
+                  {nodeOptionsValue === '' ? '—' : nodeOptionsValue}
+                </span>
+              </p>
+              <p className="mt-1 text-[11px] text-zinc-600">
+                Limita o heap e o semi-espaço da geração jovem; não reduz o consumo base. Vale a
+                partir do próximo start.
+              </p>
             </div>
-            <p className="mt-2 text-[11px] text-zinc-500">
-              NODE_OPTIONS:{' '}
-              <span className="mono text-zinc-300">
-                {nodeOptionsValue === '' ? '—' : nodeOptionsValue}
-              </span>
-            </p>
-            <p className="mt-1 text-[11px] text-zinc-600">
-              Limita o heap e o semi-espaço da geração jovem; não reduz o consumo base. Vale a
-              partir do próximo start.
-            </p>
-          </div>
+          ) : null}
 
           <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2">
             <div>

@@ -6,3 +6,4 @@ export * from './process-info';
 export * from './process-metrics';
 export * from './process-tree';
 export * from './project-discovery';
+export * from './service-tools';

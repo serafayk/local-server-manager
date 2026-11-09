@@ -70,6 +70,9 @@ gerado pelo Engine. Não retornar stack trace; o stack completo fica no log inte
 | POST   | `/api/v1/domains/hosts/sync`          | Gravar bloco no hosts (UAC, em lote)                    |
 | POST   | `/api/v1/domains/ca/trust`            | Confiar na CA local (CurrentUser)                       |
 | GET    | `/api/v1/domains/ca`                  | Certificado da CA em PEM                                |
+| GET    | `/api/v1/system/tools`                | PostgreSQL instalado + estado do Docker                 |
+| GET    | `/api/v1/projects/:id/postgres`       | Conexão do Postgres dedicado                            |
+| POST   | `/api/v1/projects/:id/backup`         | `pg_dump` do banco padrão                               |
 | GET    | `/api/v1/system/node-versions`        | Instalações de Node detectadas                          |
 | GET    | `/api/v1/tunnels`                     | Lista túneis Cloudflare                                 |
 | POST   | `/api/v1/tunnels`                     | Cria túnel (config/token/quick)                         |

@@ -50,6 +50,7 @@ export const ERROR_CODES = [
   'DOMAIN_PROXY_UNAVAILABLE',
   'HOSTS_SYNC_FAILED',
   'CERTIFICATE_ERROR',
+  'BACKUP_FAILED',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -104,4 +105,5 @@ export const ERROR_HTTP_STATUS: Readonly<Record<ErrorCode, number>> = {
   DOMAIN_PROXY_UNAVAILABLE: 503,
   HOSTS_SYNC_FAILED: 500,
   CERTIFICATE_ERROR: 500,
+  BACKUP_FAILED: 500,
 };

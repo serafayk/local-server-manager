@@ -12,7 +12,9 @@ import type {
 import { ERROR_HTTP_STATUS, PROTOCOL_VERSION } from '@lsm/contracts';
 import type { Repositories } from '@lsm/database';
 import {
+  detectDocker,
   detectNodeInstallations,
+  detectPostgresInstallations,
   inspectProjectDirectory,
   resolvePackageManagerInvocation,
   scanProjectRoot,
@@ -369,6 +371,30 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
 
     instance.get('/api/v1/system/node-versions', async (request, reply) => {
       return sendSuccess(reply, detectNodeInstallations(), requestIdOf(request));
+    });
+
+    instance.get('/api/v1/system/tools', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        { postgres: detectPostgresInstallations(), docker: detectDocker() },
+        requestIdOf(request),
+      );
+    });
+
+    instance.get('/api/v1/projects/:id/postgres', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        options.projects.postgresInfo(projectIdOf(request)),
+        requestIdOf(request),
+      );
+    });
+
+    instance.post('/api/v1/projects/:id/backup', async (request, reply) => {
+      return sendSuccess(
+        reply,
+        await options.projects.backupPostgres(projectIdOf(request)),
+        requestIdOf(request),
+      );
     });
 
     instance.get('/api/v1/projects/:id', async (request, reply) => {

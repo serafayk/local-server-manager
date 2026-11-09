@@ -21,6 +21,33 @@ export type ServeMode = 'process' | 'static';
 
 export const SERVE_MODES = ['process', 'static'] as const;
 
+/** Tipo de projeto gerenciado: app Node, processo genérico, stack Compose ou Postgres dedicado. */
+export type ProjectKind = 'node' | 'process' | 'compose' | 'postgres';
+
+export const PROJECT_KINDS = ['node', 'process', 'compose', 'postgres'] as const;
+
+export interface ComposeServiceConfig {
+  /** Caminho do docker-compose.yml (absoluto ou relativo ao workingDirectory). */
+  file: string;
+  /** Nome do projeto Compose (`-p`); null usa o nome do diretório. */
+  projectName: string | null;
+  /** Executável do Docker; null usa `docker` do PATH. */
+  dockerExecutable: string | null;
+}
+
+export interface PostgresServiceConfig {
+  /** Versão/rótulo da instalação (ex.: "16"); null detecta automaticamente. */
+  version: string | null;
+  /** Pasta `bin` da instalação; null detecta automaticamente. */
+  binDir: string | null;
+  /** Data dir; null usa `<dados do Engine>/postgres/<projectId>`. */
+  dataDir: string | null;
+  username: string;
+  password: string;
+  /** Porta do servidor; null usa 55432. */
+  port: number | null;
+}
+
 /** Critério para considerar uma dependência pronta para liberar o dependente. */
 export type DependencyWait = 'started' | 'ready';
 
@@ -89,6 +116,10 @@ export interface ProjectConfig {
   serveMode: ServeMode;
   /** Diretório servido no modo estático (relativo à raiz do projeto ou absoluto). */
   outputDir: string | null;
+  /** Tipo do projeto; `node` mantém o comportamento histórico. */
+  kind: ProjectKind;
+  compose: ComposeServiceConfig | null;
+  postgres: PostgresServiceConfig | null;
   environment: Record<string, string>;
   /** Projetos que precisam estar prontos antes deste. */
   dependsOn: ProjectDependency[];
@@ -105,4 +136,4 @@ export interface ProjectConfig {
   updatedAt: string;
 }
 
-export const CURRENT_CONFIG_SCHEMA_VERSION = 3;
+export const CURRENT_CONFIG_SCHEMA_VERSION = 4;

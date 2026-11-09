@@ -2,6 +2,23 @@
 
 Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicionadas no topo com data, contexto, decisão, alternativas e consequências.
 
+## ADR-025 - Serviços além de Node: Compose e PostgreSQL dedicado
+
+**Status:** Aceita (Fase 14)
+
+**Contexto:** o LSM controlava apenas aplicações Node. Faltavam bancos/caches no mesmo painel e no mesmo grafo de dependências. No Windows, o `postgres.exe` **se recusa a iniciar sob token de administrador**, e máquinas com UAC desabilitado (`EnableLUA=0`) executam tudo elevado — o que inviabiliza rodar o Postgres como processo filho.
+
+**Decisão:**
+
+1. **`kind`** (`node` | `process` | `compose` | `postgres`) com configuração específica (`compose`, `postgres`) em colunas JSON próprias (migração v6); `node` é o padrão e preserva o comportamento anterior. `process` é o modo "executável + argumentos" para PHP/Python/.exe.
+2. **Compose:** o runtime roda `docker compose -f <arquivo> [-p <nome>] up --abort-on-container-exit --remove-orphans` **anexado**, então crash e logs caem no supervisor como qualquer projeto. Ao parar, executa `down --remove-orphans` para garantir que containers não fiquem órfãos.
+3. **PostgreSQL dedicado:** data dir próprio (`<dados>/postgres/<id>`), `initdb` automático no primeiro start e a instância registrada como **serviço do Windows** (`pg_ctl register`, conta `NetworkService`, ACL no data dir). O Engine inicia/para via `sc`, monitora o estado, acompanha `log/postgresql.log` e expõe a URL de conexão.
+4. **Backup:** `pg_dump` sob demanda (`POST /projects/:id/backup`), gerando `.dump` custom em `<backups>/postgres`. Restauração fica para o backlog.
+5. **Detecção:** `GET /system/tools` lista instalações do PostgreSQL e o estado do Docker; nada é baixado automaticamente.
+6. **Limpeza:** excluir o projeto remove o serviço; o data dir permanece no disco de propósito.
+
+**Consequências:** bancos entram no grafo de dependências (`postgres` → `api` → `web`). Criar o serviço exige administrador: com UAC desabilitado funciona direto; com UAC habilitado, o app precisa ser aberto como administrador (a mensagem de erro orienta). Docker Compose depende do Docker Desktop e é testado com CLI simulado; o fluxo com Docker real será validado quando estiver instalado.
+
 ## ADR-024 - Domínios locais com proxy e CA própria
 
 **Status:** Aceita (Fase 13)

@@ -1,11 +1,14 @@
 import { z } from 'zod';
 import type {
+  ComposeServiceConfig,
   HealthCheckConfig,
   LaunchMode,
   LoggingConfig,
   PortSource,
+  PostgresServiceConfig,
   ProjectConfig,
   ProjectDependency,
+  ProjectKind,
   RestartPolicy,
   RuntimeConfig,
   ServeMode,
@@ -16,6 +19,7 @@ import {
   DEPENDENCY_WAITS,
   LAUNCH_MODES,
   PORT_SOURCES,
+  PROJECT_KINDS,
   SERVE_MODES,
 } from '@lsm/contracts';
 import { AppError } from '@lsm/shared';
@@ -214,6 +218,57 @@ export const shutdownSchema = z.strictObject({
   gracefulTimeoutMs: z.number().int().min(100).max(300_000).default(10_000),
 });
 
+export const projectKindSchema = z.enum(PROJECT_KINDS).default('node');
+
+export const composeServiceSchema = z.strictObject({
+  file: z
+    .string()
+    .trim()
+    .min(1, 'caminho do docker-compose é obrigatório')
+    .max(1_024)
+    .refine((value) => !CONTROL_CHARS.test(value), 'caminho inválido'),
+  projectName: z
+    .string()
+    .trim()
+    .max(63)
+    .refine((value) => value === '' || /^[a-z0-9][a-z0-9_-]*$/i.test(value), 'nome inválido')
+    .nullable()
+    .optional(),
+  dockerExecutable: z.string().trim().max(1_024).nullable().optional(),
+});
+
+export const postgresServiceSchema = z.strictObject({
+  version: z.string().trim().max(32).nullable().optional(),
+  binDir: z.string().trim().max(1_024).nullable().optional(),
+  dataDir: z.string().trim().max(1_024).nullable().optional(),
+  username: z
+    .string()
+    .trim()
+    .regex(/^[a-z_][a-z0-9_]{0,62}$/i, 'usuário inválido')
+    .default('postgres'),
+  password: z.string().max(128).default(''),
+  port: z.number().int().min(1_024).max(65_535).nullable().optional(),
+});
+
+export const composePatchSchema = z.strictObject({
+  file: z.string().trim().min(1).max(1_024).optional(),
+  projectName: z.string().trim().max(63).nullable().optional(),
+  dockerExecutable: z.string().trim().max(1_024).nullable().optional(),
+});
+
+export const postgresPatchSchema = z.strictObject({
+  version: z.string().trim().max(32).nullable().optional(),
+  binDir: z.string().trim().max(1_024).nullable().optional(),
+  dataDir: z.string().trim().max(1_024).nullable().optional(),
+  username: z
+    .string()
+    .trim()
+    .regex(/^[a-z_][a-z0-9_]{0,62}$/i, 'usuário inválido')
+    .optional(),
+  password: z.string().max(128).optional(),
+  port: z.number().int().min(1_024).max(65_535).nullable().optional(),
+});
+
 export const createProjectRequestSchema = z
   .strictObject({
     name: projectNameSchema,
@@ -224,6 +279,9 @@ export const createProjectRequestSchema = z
     launchMode: z.enum(LAUNCH_MODES).default('auto'),
     serveMode: z.enum(SERVE_MODES).default('process'),
     outputDir: z.string().trim().max(1_024).nullable().optional(),
+    kind: projectKindSchema,
+    compose: composeServiceSchema.nullable().optional(),
+    postgres: postgresServiceSchema.nullable().optional(),
     environment: environmentSchema,
     dependsOn: z.array(projectDependencySchema).max(32).default([]),
     dependencyTimeoutMs: dependencyTimeoutSchema,
@@ -256,6 +314,28 @@ export const createProjectRequestSchema = z
       }
       seen.add(dependency.projectId);
     });
+
+    if (value.kind === 'compose' && !value.compose) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['compose'],
+        message: 'compose é obrigatório para projetos Docker Compose',
+      });
+    }
+    if (value.kind === 'postgres' && !value.postgres) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['postgres'],
+        message: 'postgres é obrigatório para projetos PostgreSQL',
+      });
+    }
+    if (value.postgres?.password && value.postgres.password.length < 8) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['postgres', 'password'],
+        message: 'a senha do Postgres deve ter ao menos 8 caracteres',
+      });
+    }
   });
 
 export type ParsedCreateProjectRequest = z.output<typeof createProjectRequestSchema>;
@@ -276,6 +356,9 @@ export interface NormalizedProjectFields {
   launchMode: LaunchMode;
   serveMode: ServeMode;
   outputDir: string | null;
+  kind: ProjectKind;
+  compose: ComposeServiceConfig | null;
+  postgres: PostgresServiceConfig | null;
   environment: Record<string, string>;
   dependsOn: ProjectDependency[];
   dependencyTimeoutMs: number;
@@ -303,6 +386,24 @@ function normalizeFields(parsed: ParsedCreateProjectRequest): NormalizedProjectF
     launchMode: parsed.launchMode,
     serveMode: parsed.serveMode,
     outputDir: parsed.outputDir ?? null,
+    kind: parsed.kind,
+    compose: parsed.compose
+      ? {
+          file: parsed.compose.file,
+          projectName: parsed.compose.projectName ?? null,
+          dockerExecutable: parsed.compose.dockerExecutable ?? null,
+        }
+      : null,
+    postgres: parsed.postgres
+      ? {
+          version: parsed.postgres.version ?? null,
+          binDir: parsed.postgres.binDir ?? null,
+          dataDir: parsed.postgres.dataDir ?? null,
+          username: parsed.postgres.username,
+          password: parsed.postgres.password,
+          port: parsed.postgres.port ?? null,
+        }
+      : null,
     environment: { ...parsed.environment },
     dependsOn: parsed.dependsOn.map((dependency) => ({ ...dependency })),
     dependencyTimeoutMs: parsed.dependencyTimeoutMs,
@@ -351,6 +452,9 @@ export const updateProjectRequestSchema = z.strictObject({
   launchMode: z.enum(LAUNCH_MODES).optional(),
   serveMode: z.enum(SERVE_MODES).optional(),
   outputDir: z.string().trim().max(1_024).nullable().optional(),
+  kind: z.enum(PROJECT_KINDS).optional(),
+  compose: composePatchSchema.nullable().optional(),
+  postgres: postgresPatchSchema.nullable().optional(),
   environment: z.record(z.string(), z.string().max(8_192)).optional(),
   dependsOn: z.array(projectDependencySchema).max(32).optional(),
   // Sem `.default()` aqui: no PUT, ausência do campo significa "não alterar".
@@ -384,6 +488,15 @@ export function parseUpdateProjectRequest(
   if (patch.launchMode !== undefined) merged.launchMode = patch.launchMode;
   if (patch.serveMode !== undefined) merged.serveMode = patch.serveMode;
   if (patch.outputDir !== undefined) merged.outputDir = patch.outputDir;
+  if (patch.kind !== undefined) merged.kind = patch.kind;
+  if (patch.compose !== undefined) {
+    merged.compose =
+      patch.compose === null ? null : { ...(existing.compose ?? {}), ...patch.compose };
+  }
+  if (patch.postgres !== undefined) {
+    merged.postgres =
+      patch.postgres === null ? null : { ...(existing.postgres ?? {}), ...patch.postgres };
+  }
   if (patch.environment !== undefined) merged.environment = patch.environment;
   if (patch.dependsOn !== undefined) merged.dependsOn = patch.dependsOn;
   if (patch.dependencyTimeoutMs !== undefined) {

@@ -1,9 +1,19 @@
 import type { LogRecord } from '@lsm/contracts';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Copy, Hammer, Pencil, Play, RotateCw, Square, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Copy,
+  DatabaseBackup,
+  Hammer,
+  Pencil,
+  Play,
+  RotateCw,
+  Square,
+  Trash2,
+} from 'lucide-react';
 import { useProjectActions } from '../lib/actions';
 import { useEngine } from '../providers/engine-provider';
 import {
@@ -23,6 +33,7 @@ import {
   shortId,
 } from '../lib/format';
 import { mergeLogRecords } from '../lib/logs';
+import { copyText } from '../lib/tauri';
 import { useAppStore } from '../stores/app-store';
 import { LogViewer } from '../components/LogViewer';
 import { ProjectForm } from '../components/ProjectForm';
@@ -88,6 +99,24 @@ export function ProjectDetailPage() {
           : `Build falhou (code ${result.exitCode ?? 'null'}). Veja os logs.`,
       );
       setInstanceId(result.instanceId);
+      setTab('logs');
+    },
+    onError: (error) => {
+      setBuildNotice(error instanceof Error ? error.message : String(error));
+    },
+  });
+
+  const postgresInfo = useQuery({
+    queryKey: ['postgres-info', id ?? ''],
+    queryFn: () => client.getPostgresInfo(id as string),
+    enabled: Boolean(id) && query.data?.config.kind === 'postgres',
+    retry: false,
+  });
+
+  const backup = useMutation({
+    mutationFn: () => client.backupPostgres(id ?? ''),
+    onSuccess: (result) => {
+      setBuildNotice(`Backup gerado (${Math.round(result.sizeBytes / 1024)} KB) em ${result.file}`);
       setTab('logs');
     },
     onError: (error) => {
@@ -196,19 +225,40 @@ export function ProjectDetailPage() {
               <Copy className="h-3.5 w-3.5" />
               Duplicar
             </Button>
-            <Button
-              size="sm"
-              disabled={active}
-              loading={build.isPending}
-              title={active ? 'Pare o projeto antes de rodar o build' : 'Rodar o script build'}
-              onClick={() => {
-                setBuildNotice(null);
-                build.mutate();
-              }}
-            >
-              <Hammer className="h-3.5 w-3.5" />
-              Build
-            </Button>
+            {config.kind === 'node' ? (
+              <Button
+                size="sm"
+                disabled={active}
+                loading={build.isPending}
+                title={active ? 'Pare o projeto antes de rodar o build' : 'Rodar o script build'}
+                onClick={() => {
+                  setBuildNotice(null);
+                  build.mutate();
+                }}
+              >
+                <Hammer className="h-3.5 w-3.5" />
+                Build
+              </Button>
+            ) : null}
+            {config.kind === 'postgres' ? (
+              <Button
+                size="sm"
+                disabled={runtime.status !== 'RUNNING'}
+                loading={backup.isPending}
+                title={
+                  runtime.status === 'RUNNING'
+                    ? 'Gerar pg_dump do banco padrão'
+                    : 'Inicie o PostgreSQL para gerar o backup'
+                }
+                onClick={() => {
+                  setBuildNotice(null);
+                  backup.mutate();
+                }}
+              >
+                <DatabaseBackup className="h-3.5 w-3.5" />
+                Backup
+              </Button>
+            ) : null}
             <Button
               size="sm"
               variant="danger"
@@ -277,13 +327,66 @@ export function ProjectDetailPage() {
 
           <Card title="Comando">
             <p className="mono break-all rounded-lg border border-zinc-800 bg-black/40 p-2 text-xs text-zinc-200">
-              {formatCommand(config.runtime.executable, config.runtime.args)}
+              {config.kind === 'compose'
+                ? `docker compose -f ${config.compose?.file ?? 'docker-compose.yml'} up`
+                : config.kind === 'postgres'
+                  ? `postgres (serviço lsm-pg-…) — porta ${config.postgres?.port ?? 55432}`
+                  : formatCommand(config.runtime.executable, config.runtime.args)}
             </p>
             <dl className="mt-3 grid gap-3">
               <Definition
                 label="Diretório"
                 value={<span className="mono text-xs">{config.workingDirectory}</span>}
               />
+              <Definition
+                label="Tipo"
+                value={
+                  config.kind === 'compose'
+                    ? 'Docker Compose'
+                    : config.kind === 'postgres'
+                      ? 'PostgreSQL dedicado'
+                      : config.kind === 'process'
+                        ? 'Processo genérico'
+                        : 'Node.js'
+                }
+              />
+              {config.kind === 'postgres' && postgresInfo.data ? (
+                <>
+                  <Definition
+                    label="Conexão"
+                    value={
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="mono text-xs">
+                          {postgresInfo.data.url.replace(
+                            /^(postgresql:\/\/[^:]+):[^@]+@/,
+                            '$1:••••@',
+                          )}
+                        </span>
+                        <Button
+                          size="sm"
+                          title="Copiar URL completa (com senha)"
+                          onClick={() => {
+                            void copyText(postgresInfo.data?.url ?? '');
+                            setBuildNotice('URL de conexão copiada (com senha).');
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      </span>
+                    }
+                  />
+                  <Definition
+                    label="Data dir"
+                    value={<span className="mono text-xs">{postgresInfo.data.dataDir}</span>}
+                  />
+                </>
+              ) : null}
+              {config.kind === 'compose' && config.compose ? (
+                <Definition
+                  label="Compose"
+                  value={<span className="mono text-xs">{config.compose.file}</span>}
+                />
+              ) : null}
               <Definition label="Porta" value={config.port ?? '—'} />
               <Definition
                 label="Ambiente"

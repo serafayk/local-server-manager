@@ -1,4 +1,4 @@
-import type { ProjectConfig, ProjectDependency } from '@lsm/contracts';
+import type { ProjectConfig, ProjectDependency, ProjectKind } from '@lsm/contracts';
 
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
 export type CommandMode = 'script' | 'custom';
@@ -14,9 +14,19 @@ export interface ProjectFormState {
   directory: string;
   groupId: string;
   mode: CommandMode;
+  kind: ProjectKind;
   launchMode: 'auto' | 'wrapper' | 'direct';
   serveMode: 'process' | 'static';
   outputDir: string;
+  composeFile: string;
+  composeProject: string;
+  composeDocker: string;
+  pgVersion: string;
+  pgBinDir: string;
+  pgDataDir: string;
+  pgUsername: string;
+  pgPassword: string;
+  pgPort: string;
   packageManager: PackageManager;
   script: string;
   executable: string;
@@ -56,9 +66,19 @@ export function emptyFormState(): ProjectFormState {
     directory: '',
     groupId: '',
     mode: 'custom',
+    kind: 'node',
     launchMode: 'auto',
     serveMode: 'process',
     outputDir: '',
+    composeFile: 'docker-compose.yml',
+    composeProject: '',
+    composeDocker: '',
+    pgVersion: '',
+    pgBinDir: '',
+    pgDataDir: '',
+    pgUsername: 'postgres',
+    pgPassword: '',
+    pgPort: '',
     packageManager: 'npm',
     script: 'dev',
     executable: 'node',
@@ -93,9 +113,19 @@ export function formStateFromConfig(config: ProjectConfig): ProjectFormState {
     directory: config.workingDirectory,
     groupId: config.groupId ?? '',
     mode: 'custom',
+    kind: config.kind ?? 'node',
     launchMode: config.launchMode ?? 'auto',
     serveMode: config.serveMode ?? 'process',
     outputDir: config.outputDir ?? '',
+    composeFile: config.compose?.file ?? 'docker-compose.yml',
+    composeProject: config.compose?.projectName ?? '',
+    composeDocker: config.compose?.dockerExecutable ?? '',
+    pgVersion: config.postgres?.version ?? '',
+    pgBinDir: config.postgres?.binDir ?? '',
+    pgDataDir: config.postgres?.dataDir ?? '',
+    pgUsername: config.postgres?.username ?? 'postgres',
+    pgPassword: config.postgres?.password ?? '',
+    pgPort: config.postgres?.port === null ? '' : String(config.postgres?.port ?? ''),
     packageManager: 'npm',
     script: 'dev',
     executable: config.runtime.executable,
@@ -187,6 +217,14 @@ export function buildNodeOptions(heapMb: number | null, semiSpaceMb: number | nu
   return parts.join(' ');
 }
 
+/** Senha aleatória para a instância dedicada (base64url, 24 caracteres). */
+export function generatePostgresPassword(): string {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  const raw = btoa(String.fromCharCode(...bytes));
+  return raw.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 export interface MemoryProfileState {
   profile: MemoryProfile;
   heapMb: number | null;
@@ -246,11 +284,32 @@ export function applyMemoryProfile(
 
 function buildSharedBody(state: ProjectFormState): Record<string, unknown> {
   const port = state.port.trim() === '' ? null : parseInteger(state.port, Number.NaN);
+  const pgPort = state.pgPort.trim() === '' ? null : parseInteger(state.pgPort, Number.NaN);
   return {
     name: state.name.trim(),
     description: state.description.trim() === '' ? null : state.description.trim(),
     workingDirectory: state.directory.trim(),
     groupId: state.groupId.trim() === '' ? null : state.groupId.trim(),
+    kind: state.kind,
+    compose:
+      state.kind === 'compose'
+        ? {
+            file: state.composeFile.trim(),
+            projectName: state.composeProject.trim() === '' ? null : state.composeProject.trim(),
+            dockerExecutable: state.composeDocker.trim() === '' ? null : state.composeDocker.trim(),
+          }
+        : null,
+    postgres:
+      state.kind === 'postgres'
+        ? {
+            version: state.pgVersion.trim() === '' ? null : state.pgVersion.trim(),
+            binDir: state.pgBinDir.trim() === '' ? null : state.pgBinDir.trim(),
+            dataDir: state.pgDataDir.trim() === '' ? null : state.pgDataDir.trim(),
+            username: state.pgUsername.trim() === '' ? 'postgres' : state.pgUsername.trim(),
+            password: state.pgPassword,
+            port: pgPort,
+          }
+        : null,
     launchMode: state.launchMode,
     serveMode: state.serveMode,
     outputDir: state.outputDir.trim() === '' ? null : state.outputDir.trim(),
@@ -334,6 +393,30 @@ export function validateBasics(state: ProjectFormState): string[] {
 
 export function validateCommand(state: ProjectFormState): string[] {
   const errors: string[] = [];
+
+  if (state.kind === 'compose') {
+    if (state.composeFile.trim() === '') {
+      errors.push('Informe o arquivo do Docker Compose (ex.: docker-compose.yml).');
+    }
+    return errors;
+  }
+
+  if (state.kind === 'postgres') {
+    const pgPort = Number.parseInt(state.pgPort, 10);
+    if (
+      state.pgPort.trim() !== '' &&
+      (!Number.isInteger(pgPort) || pgPort < 1_024 || pgPort > 65_535)
+    ) {
+      errors.push('A porta do PostgreSQL deve estar entre 1024 e 65535.');
+    }
+    if (!/^[a-z_][a-z0-9_]{0,62}$/i.test(state.pgUsername.trim())) {
+      errors.push('Usuário do PostgreSQL inválido.');
+    }
+    if (state.pgPassword !== '' && state.pgPassword.length < 8) {
+      errors.push('A senha do PostgreSQL deve ter ao menos 8 caracteres (vazio gera uma).');
+    }
+    return errors;
+  }
 
   if (state.mode === 'script') {
     if (!SCRIPT_NAME.test(state.script.trim())) {

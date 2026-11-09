@@ -1,10 +1,13 @@
 import type {
+  ComposeServiceConfig,
   DependencyWait,
   HealthCheckConfig,
   LaunchMode,
   LoggingConfig,
   PortSource,
+  PostgresServiceConfig,
   ProjectConfig,
+  ProjectKind,
   RestartPolicy,
   RuntimeConfig,
   ServeMode,
@@ -128,6 +131,46 @@ export interface HostsSyncResult {
   error: string | null;
 }
 
+export interface PostgresInstallation {
+  version: string;
+  binDir: string;
+  /** Data dir do serviço instalado (quando detectável). */
+  dataDir: string | null;
+  /** Nome do serviço Windows, se existir. */
+  service: string | null;
+}
+
+export interface DockerStatus {
+  available: boolean;
+  version: string | null;
+  composeVersion: string | null;
+  error: string | null;
+}
+
+export interface SystemTools {
+  postgres: PostgresInstallation[];
+  docker: DockerStatus;
+}
+
+export interface PostgresConnectionInfo {
+  host: string;
+  port: number;
+  username: string;
+  database: string;
+  dataDir: string;
+  binDir: string;
+  version: string | null;
+  /** `postgresql://usuario:senha@host:porta/postgres` (senha inclusa). */
+  url: string;
+  running: boolean;
+}
+
+export interface PostgresBackupResult {
+  file: string;
+  sizeBytes: number;
+  durationMs: number;
+}
+
 export interface ProjectSummary {
   config: ProjectConfig;
   runtime: RuntimeSnapshot;
@@ -176,6 +219,11 @@ export interface ExportedProject {
   launchMode: LaunchMode;
   serveMode: ServeMode;
   outputDir: string | null;
+  /** Tipo do projeto; exportado para recriar serviços não-Node. */
+  kind: ProjectKind;
+  compose: ComposeServiceConfig | null;
+  /** Senha do Postgres vai vazia (segredo não é exportado). */
+  postgres: PostgresServiceConfig | null;
   /** Referências por **nome** de projeto (IDs não são portáveis entre máquinas). */
   dependsOn: ExportedDependency[];
   dependencyTimeoutMs: number;

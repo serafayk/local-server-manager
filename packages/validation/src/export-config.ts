@@ -1,7 +1,13 @@
 import { z } from 'zod';
-import { PORT_SOURCES } from '@lsm/contracts';
+import { PORT_SOURCES, PROJECT_KINDS } from '@lsm/contracts';
 import { AppError } from '@lsm/shared';
-import { projectNameSchema, runtimeConfigSchema, workingDirectorySchema } from './project-config';
+import {
+  composePatchSchema,
+  postgresPatchSchema,
+  projectNameSchema,
+  runtimeConfigSchema,
+  workingDirectorySchema,
+} from './project-config';
 
 export const exportedProjectSchema = z.strictObject({
   name: projectNameSchema,
@@ -16,6 +22,9 @@ export const exportedProjectSchema = z.strictObject({
   launchMode: z.enum(['auto', 'wrapper', 'direct']).optional(),
   serveMode: z.enum(['process', 'static']).optional(),
   outputDir: z.string().trim().max(1_024).nullable().optional(),
+  kind: z.enum(PROJECT_KINDS).optional(),
+  compose: composePatchSchema.nullable().optional(),
+  postgres: postgresPatchSchema.nullable().optional(),
   dependsOn: z
     .array(
       z.strictObject({

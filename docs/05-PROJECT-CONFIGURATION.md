@@ -62,6 +62,16 @@ O schema final deve ser tipado e validado por Zod. O exemplo é ilustrativo e de
 - Ciclos, auto-dependência e referências inexistentes são rejeitados na escrita.
 - A ordem de subida é topológica; `startupOrder` desempata dentro do mesmo nível.
 
+### Tipos de projeto e serviços
+
+- `kind`: `node` (padrão), `process`, `compose` ou `postgres`.
+- `process`: qualquer executável com argumentos (PHP, Python, .exe); sem shell.
+- `compose`: `{ file, projectName, dockerExecutable }`. O Engine roda
+  `docker compose up` anexado e `down --remove-orphans` ao parar.
+- `postgres`: `{ version, binDir, dataDir, username, password, port }`. Campos
+  nulos usam defaults do Engine (`<dados>/postgres/<id>` e porta 55432); senha
+  vazia é gerada na criação. A instância roda como serviço do Windows.
+
 ## 2. Campos obrigatórios
 
 - `id`: UUID gerado pelo sistema.

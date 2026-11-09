@@ -1,3 +1,6 @@
+import { mkdirSync, statSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { join } from 'node:path';
 import type { ListEventsOptions, SystemEvent } from '@lsm/database';
 import type {
   BuildResult,
@@ -7,6 +10,8 @@ import type {
   ImportConfigResult,
   LaunchPreview,
   LogRecord,
+  PostgresBackupResult,
+  PostgresConnectionInfo,
   ProjectConfig,
   ProjectDependency,
   ProjectSummary,
@@ -23,6 +28,12 @@ import {
 import type { EventBus } from '../core/event-bus';
 import type { LogManager } from '../log-manager/log-manager';
 import { resolveBuildCommand, resolveLaunch } from '../launch/launch-resolver';
+import {
+  pgDumpSpec,
+  postgresConnectionUrl,
+  resolvePostgresConfig,
+} from '../postgres/command-builder';
+import { postgresServiceName, removePostgresService } from '../postgres/service-manager';
 import type { ProcessManager } from '../process-manager/process-manager';
 import type { ManagedProcess } from '../process-manager/spawn-adapter';
 import type { GroupService } from './group-service';
@@ -34,6 +45,7 @@ const SENSITIVE_ENV_KEY =
   /(pass(word|phrase)?|secret|token|api[_-]?key|apikey|authorization|cookie|credential|private[_-]?key|session)/i;
 
 const BUILD_TIMEOUT_MS = 15 * 60 * 1_000;
+const BACKUP_TIMEOUT_MS = 10 * 60 * 1_000;
 
 export interface ProjectServiceDeps {
   repositories: Repositories;
@@ -44,6 +56,8 @@ export interface ProjectServiceDeps {
   events: EventBus;
   clock: Clock;
   logger: Logger;
+  postgresRoot: string;
+  postgresBackupsDir: string;
 }
 
 export interface TailLogsResult {
@@ -69,6 +83,10 @@ export class ProjectService {
     const config: ProjectConfig = {
       id: newId(),
       ...fields,
+      postgres:
+        fields.postgres !== null && fields.postgres.password.trim() === ''
+          ? { ...fields.postgres, password: generatePassword() }
+          : fields.postgres,
       schemaVersion: CURRENT_CONFIG_SCHEMA_VERSION,
       createdAt: now,
       updatedAt: now,
@@ -117,6 +135,9 @@ export class ProjectService {
     }
 
     const config = parseUpdateProjectRequest(existing, input, this.deps.clock.nowIso());
+    if (config.postgres !== null && config.postgres.password.trim() === '') {
+      config.postgres = { ...config.postgres, password: generatePassword() };
+    }
 
     if (config.groupId !== null && !this.deps.repositories.groups.findById(config.groupId)) {
       throw new AppError('GROUP_NOT_FOUND', `Grupo não encontrado: ${config.groupId}`);
@@ -174,6 +195,16 @@ export class ProjectService {
 
     this.deps.repositories.projects.delete(config.id);
     this.deps.supervisor.unregisterProject(config.id);
+
+    if (config.kind === 'postgres') {
+      void removePostgresService(postgresServiceName(config.id)).catch((error: unknown) => {
+        this.deps.logger.warn(
+          'Falha ao remover serviço do PostgreSQL',
+          { projectId: config.id },
+          error,
+        );
+      });
+    }
 
     // Remove referências pendentes para não deixar dependências órfãs.
     for (const dependent of dependents) {
@@ -339,6 +370,97 @@ export class ProjectService {
     }
   }
 
+  /** Conexão do Postgres dedicado (porta/data dir resolvidos). */
+  postgresInfo(projectIdOrName: string): PostgresConnectionInfo {
+    const config = this.getProject(projectIdOrName);
+    if (config.kind !== 'postgres') {
+      throw new AppError('PROJECT_INVALID_CONFIG', `O projeto "${config.name}" não é PostgreSQL`);
+    }
+    const resolved = resolvePostgresConfig(config, this.deps.postgresRoot);
+    const snapshot = this.deps.supervisor.getSnapshot(config.id);
+    return {
+      host: '127.0.0.1',
+      port: resolved.port,
+      username: resolved.username,
+      database: 'postgres',
+      dataDir: resolved.dataDir,
+      binDir: resolved.binDir,
+      version: resolved.version,
+      url: postgresConnectionUrl(resolved),
+      running: snapshot.status === 'RUNNING',
+    };
+  }
+
+  /** `pg_dump` do banco padrão do serviço (exige o projeto em execução). */
+  async backupPostgres(projectIdOrName: string): Promise<PostgresBackupResult> {
+    const config = this.getProject(projectIdOrName);
+    if (config.kind !== 'postgres' || config.postgres === null) {
+      throw new AppError('PROJECT_INVALID_CONFIG', `O projeto "${config.name}" não é PostgreSQL`);
+    }
+    const snapshot = this.deps.supervisor.getSnapshot(config.id);
+    if (snapshot.status !== 'RUNNING') {
+      throw new AppError('PROJECT_NOT_RUNNING', `Inicie "${config.name}" antes de gerar o backup`);
+    }
+
+    const resolved = resolvePostgresConfig(config, this.deps.postgresRoot);
+    mkdirSync(this.deps.postgresBackupsDir, { recursive: true });
+    const stamp = this.deps.clock.nowIso().replace(/[:.]/g, '-');
+    const file = join(this.deps.postgresBackupsDir, `${slugify(config.name)}-${stamp}.dump`);
+    const instanceId = newId();
+    const startedAt = Date.now();
+    const spec = pgDumpSpec(resolved, file);
+
+    this.deps.logManager.registerStream(config.id, instanceId, config.logging, 'project.log');
+    this.deps.logManager.recordSystem(
+      config.id,
+      instanceId,
+      `pg_dump iniciado (porta ${resolved.port}, usuário ${resolved.username})`,
+    );
+
+    try {
+      const managed = this.deps.processManager.spawn({
+        executable: spec.executable,
+        args: spec.args,
+        cwd: resolved.binDir,
+        env: { ...config.environment, ...spec.env },
+      });
+      managed.onStdout((chunk) =>
+        this.deps.logManager.push(config.id, instanceId, 'stdout', chunk),
+      );
+      managed.onStderr((chunk) =>
+        this.deps.logManager.push(config.id, instanceId, 'stderr', chunk),
+      );
+
+      const exitCode = await waitForBuildExit(managed, BACKUP_TIMEOUT_MS, () =>
+        this.deps.processManager.stop(managed.pid, { gracefulTimeoutMs: 5_000 }),
+      );
+      const durationMs = Date.now() - startedAt;
+      if (exitCode !== 0) {
+        throw new AppError(
+          'BACKUP_FAILED',
+          `pg_dump falhou (code ${String(exitCode)}). Veja os logs do projeto.`,
+        );
+      }
+      const sizeBytes = statSync(file).size;
+      this.deps.logManager.recordSystem(
+        config.id,
+        instanceId,
+        `backup concluído (${Math.round(sizeBytes / 1024)} KB, ${Math.round(durationMs / 1_000)}s)`,
+      );
+      this.deps.repositories.events.append({
+        projectId: config.id,
+        instanceId,
+        level: 'info',
+        eventType: 'postgres.backup.completed',
+        message: `backup do PostgreSQL gerado`,
+        metadata: { file, sizeBytes },
+      });
+      return { file, sizeBytes, durationMs };
+    } finally {
+      await this.deps.logManager.closeInstance(instanceId).catch(() => undefined);
+    }
+  }
+
   /** Exporta configurações sem segredos de ambiente. */
   exportConfiguration(): ExportBundle {
     const groupNames = new Map(
@@ -371,6 +493,9 @@ export class ProjectService {
         launchMode: config.launchMode,
         serveMode: config.serveMode,
         outputDir: config.outputDir,
+        kind: config.kind,
+        compose: config.compose,
+        postgres: config.postgres === null ? null : { ...config.postgres, password: '' },
         dependsOn: config.dependsOn.flatMap((dependency) => {
           const name = projectNames.get(dependency.projectId);
           return name ? [{ project: name, waitFor: dependency.waitFor }] : [];
@@ -418,6 +543,9 @@ export class ProjectService {
           launchMode: item.launchMode ?? 'auto',
           serveMode: item.serveMode ?? 'process',
           outputDir: item.outputDir ?? null,
+          kind: item.kind ?? 'node',
+          compose: item.compose ?? null,
+          postgres: item.postgres ?? null,
           enabled: item.enabled ?? true,
           startOnBoot: item.startOnBoot ?? false,
           startupOrder: item.startupOrder ?? 0,
@@ -427,7 +555,13 @@ export class ProjectService {
           ...(item.shutdown !== undefined ? { shutdown: item.shutdown } : {}),
         });
         created.set(item.name, config.id);
-        results.push({ name: item.name, success: true });
+        results.push({
+          name: item.name,
+          success: true,
+          ...(config.kind === 'postgres'
+            ? { message: 'senha do PostgreSQL gerada novamente (segredos não são exportados)' }
+            : {}),
+        });
       } catch (error) {
         results.push(
           isAppError(error)
@@ -513,6 +647,7 @@ export class ProjectService {
   }
 }
 
+/** Espera o fim de um processo one-shot (build/pg_dump) com timeout. */
 function waitForBuildExit(
   managed: ManagedProcess,
   timeoutMs: number,
@@ -537,4 +672,19 @@ function waitForBuildExit(
     }, timeoutMs);
     timer.unref();
   });
+}
+
+function generatePassword(): string {
+  return randomBytes(18).toString('base64url');
+}
+
+function slugify(value: string): string {
+  const slug = value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  return slug === '' ? 'postgres' : slug;
 }

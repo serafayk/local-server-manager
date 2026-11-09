@@ -332,7 +332,20 @@ pnpm --filter @lsm/desktop tauri:build
   demanda (`certs/` no diretório de dados).
 - Erros 404/502 trazem página com projeto, estado e porta esperada.
 
-## 17. Limitações conhecidas (Fase 7+)
+## 17. Serviços além de Node (Fase 14)
+
+- `kind`: `node` | `compose` | `postgres`; migração v6 (`kind`, `compose_json`,
+  `postgres_json`).
+- **Compose:** `docker compose up` anexado (`--abort-on-container-exit`), logs no
+  supervisor e `down --remove-orphans` ao parar.
+- **PostgreSQL dedicado:** `initdb` automático, data dir próprio e serviço do
+  Windows (`pg_ctl register`, conta NetworkService) — necessário porque
+  `postgres.exe` recusa token de administrador (UAC desabilitado).
+- Monitor de serviço a cada 2s; logs vêm de `data/log/postgresql.log`.
+- `pg_dump` sob demanda grava `.dump` em `<backups>/postgres`.
+- `GET /system/tools` detecta PostgreSQL e Docker; nenhum binário é baixado.
+
+## 18. Limitações conhecidas (Fase 7+)
 
 1. **Assinatura e updater automático** — o instalador NSIS é gerado, mas assinatura de código e atualização automática ficam para a Fase 7.
 2. **Sem single-instance do desktop** — abrir o app duas vezes abre duas janelas (o Engine continua único por diretório de dados).
@@ -344,7 +357,7 @@ pnpm --filter @lsm/desktop tauri:build
 8. **Stop no Windows é forçado** — janela cooperativa curta (ADR-011).
 9. **Retenção sem limite global de disco** — hoje é por projeto/dias.
 
-## 18. Dados e privacidade
+## 19. Dados e privacidade
 
 - Banco: `%LOCALAPPDATA%\LocalServerManager\data\manager.sqlite`
 - Logs de processo: `%LOCALAPPDATA%\LocalServerManager\logs\<projectId>\<instanceId>.log`

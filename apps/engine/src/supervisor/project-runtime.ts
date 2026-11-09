@@ -1,4 +1,6 @@
-import { statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type {
   DesiredState,
   HealthStatus,
@@ -12,15 +14,31 @@ import type {
 import { canTransition } from '@lsm/contracts';
 import type { Repositories } from '@lsm/database';
 import { assertDirectlySpawnable, resolveExecutable } from '@lsm/platform-win';
-import type { Clock, Logger } from '@lsm/shared';
+import type { Clock, Logger, TimerHandle } from '@lsm/shared';
 import { AppError, newId } from '@lsm/shared';
 import type { EventBus } from '../core/event-bus';
 import { OperationQueue } from '../core/operation-queue';
+import { composeDownArgs, composeUpSpec } from '../compose/command-builder';
 import type { LogManager } from '../log-manager/log-manager';
 import { resolveLaunch, resolveStaticRoot } from '../launch/launch-resolver';
 import type { ProcessManager } from '../process-manager/process-manager';
 import type { ExitInfo, ManagedProcess } from '../process-manager/spawn-adapter';
 import { checkPort } from '../ports/port-checker';
+import {
+  initdbSpec,
+  isInitialized,
+  postgresSpawnSpec,
+  resolvePostgresConfig,
+  type ResolvedPostgres,
+} from '../postgres/command-builder';
+import {
+  ensurePostgresService,
+  postgresLogFile,
+  postgresServiceName,
+  queryPostgresService,
+  startPostgresService,
+  stopPostgresService,
+} from '../postgres/service-manager';
 import { HealthMonitor } from '../health-monitor/health-monitor';
 import { RecoveryManager } from '../recovery/recovery-manager';
 import type { StaticHostManager } from '../static/static-host';
@@ -45,6 +63,8 @@ export interface ProjectRuntimeDeps {
   logger: Logger;
   processManager: ProcessManager;
   staticHost: StaticHostManager;
+  /** Raiz dos data dirs de Postgres gerenciados pelo Engine. */
+  postgresRoot: string;
 }
 
 interface FailureDiagnosis {
@@ -57,6 +77,17 @@ const FAILURE_PATTERNS: ReadonlyArray<{ pattern: RegExp; hint: string; retryable
   {
     pattern: /EADDRINUSE|address already in use/i,
     hint: 'Porta já está em uso. Encerre o processo que a ocupa ou altere a porta do projeto.',
+    retryable: false,
+  },
+  {
+    pattern:
+      /Cannot connect to the Docker daemon|error during connect|docker daemon is not running/i,
+    hint: 'Docker não está rodando. Abra o Docker Desktop e inicie o projeto novamente.',
+    retryable: false,
+  },
+  {
+    pattern: /'docker' não é reconhecido|'docker' is not recognized|spawn docker ENOENT/i,
+    hint: 'Docker CLI não encontrado. Instale o Docker Desktop e reabra o app.',
     retryable: false,
   },
   {
@@ -129,6 +160,10 @@ export class ProjectRuntime {
   private portInUseValue: boolean | null = null;
   private lastFailureHintValue: string | null = null;
   private outputBuffer = '';
+  private serviceMonitor: TimerHandle | null = null;
+  private logTimer: TimerHandle | null = null;
+  private logFile: string | null = null;
+  private logOffset = 0;
   private disposed = false;
 
   constructor(private readonly deps: ProjectRuntimeDeps) {
@@ -300,6 +335,12 @@ export class ProjectRuntime {
       await this.startStatic(instanceId);
       return;
     }
+
+    if (this.configValue.kind === 'postgres') {
+      await this.startPostgres(instanceId);
+      return;
+    }
+
     const spawnSpec = spec as SpawnSpec;
 
     let managed: ManagedProcess;
@@ -531,6 +572,11 @@ export class ProjectRuntime {
       return;
     }
 
+    if (this.configValue.kind === 'postgres' && instanceId !== null) {
+      await this.stopPostgres(instanceId);
+      return;
+    }
+
     if (pid === null || instanceId === null) {
       this.safeTransition('STOPPED');
       return;
@@ -560,6 +606,273 @@ export class ProjectRuntime {
     }
     // Garante que o arquivo de log esteja fechado antes de retornar ao chamador.
     await this.deps.logManager.closeInstance(instanceId);
+
+    if (this.configValue.kind === 'compose') {
+      await this.cleanupCompose(instanceId);
+    }
+  }
+
+  /**
+   * PostgreSQL dedicado roda como serviço do Windows (NetworkService): o
+   * `postgres.exe` se recusa a iniciar sob token de administrador, comum em
+   * máquinas com UAC desabilitado.
+   */
+  private async startPostgres(instanceId: string): Promise<void> {
+    const resolved = resolvePostgresConfig(this.configValue, this.deps.postgresRoot);
+    const serviceName = postgresServiceName(this.projectId);
+
+    await this.preparePostgres(instanceId);
+    this.deps.logManager.recordSystem(
+      this.projectId,
+      instanceId,
+      `registrando serviço ${serviceName} (porta ${resolved.port})`,
+    );
+    await ensurePostgresService(resolved, serviceName);
+    await startPostgresService(serviceName);
+
+    this.startPostgresLogTail(resolved, instanceId);
+    this.startServiceMonitor(instanceId, serviceName);
+
+    if (this.instanceIdValue !== instanceId || this.statusValue !== 'STARTING') {
+      return;
+    }
+
+    const startedAt = this.deps.clock.nowIso();
+    this.startedAtValue = startedAt;
+    this.updatedAtValue = startedAt;
+    this.healthValue = 'HEALTHY';
+    this.pidValue = null;
+    this.tryPersist(() =>
+      this.deps.repositories.instances.markRunning({
+        id: instanceId,
+        pid: null,
+        pidStartedAt: null,
+        startedAt,
+      }),
+    );
+    this.transition('RUNNING');
+    this.deps.logManager.recordSystem(
+      this.projectId,
+      instanceId,
+      `serviço ${serviceName} em execução em 127.0.0.1:${resolved.port}`,
+    );
+    this.persistEvent(
+      'info',
+      'project.process.started',
+      `serviço ${serviceName} iniciado (porta ${resolved.port})`,
+      { service: serviceName, port: resolved.port, dataDir: resolved.dataDir },
+    );
+  }
+
+  private async stopPostgres(instanceId: string): Promise<void> {
+    this.stopServiceMonitor();
+    this.stopLogTail();
+
+    const serviceName = postgresServiceName(this.projectId);
+    const at = this.deps.clock.nowIso();
+    try {
+      await stopPostgresService(serviceName);
+    } catch (error) {
+      this.deps.logger.warn(
+        'Falha ao parar o serviço PostgreSQL',
+        { projectId: this.projectId, serviceName },
+        error,
+      );
+      this.lastFailureHintValue =
+        'O serviço do PostgreSQL não parou no tempo esperado. Verifique o serviço pelo Windows.';
+    }
+
+    this.healthValue = 'UNKNOWN';
+    this.startedAtValue = null;
+    this.pidValue = null;
+    this.updatedAtValue = at;
+    this.safeTransition('STOPPED');
+    this.tryPersist(() =>
+      this.deps.repositories.instances.finish({
+        id: instanceId,
+        endedAt: at,
+        exitCode: 0,
+        exitSignal: null,
+        terminationReason: this.stopReason ?? 'STOP_MANUAL',
+        status: 'STOPPED',
+      }),
+    );
+    this.deps.logManager.recordSystem(
+      this.projectId,
+      instanceId,
+      `serviço ${serviceName} parado (${this.stopReason ?? 'STOP_MANUAL'})`,
+    );
+    await this.deps.logManager.closeInstance(instanceId);
+  }
+
+  private startServiceMonitor(instanceId: string, serviceName: string): void {
+    this.stopServiceMonitor();
+    const tick = (): void => {
+      void queryPostgresService(serviceName)
+        .then((state) => {
+          if (this.instanceIdValue !== instanceId || this.statusValue !== 'RUNNING') {
+            return;
+          }
+          if (state === 'STOPPED' || state === 'NOT_FOUND') {
+            this.deps.logManager.recordSystem(
+              this.projectId,
+              instanceId,
+              `serviço ${serviceName} não está mais em execução (${state})`,
+            );
+            this.handleExit(instanceId, { code: null, signal: null });
+            return;
+          }
+          this.serviceMonitor = this.deps.clock.setTimeout(tick, 2_000);
+          this.serviceMonitor.unref();
+        })
+        .catch(() => {
+          this.serviceMonitor = this.deps.clock.setTimeout(tick, 5_000);
+          this.serviceMonitor.unref();
+        });
+    };
+    this.serviceMonitor = this.deps.clock.setTimeout(tick, 2_000);
+    this.serviceMonitor.unref();
+  }
+
+  private stopServiceMonitor(): void {
+    if (this.serviceMonitor) {
+      this.deps.clock.clearTimeout(this.serviceMonitor);
+      this.serviceMonitor = null;
+    }
+  }
+
+  /** Copia novas linhas do log do PostgreSQL para o log do projeto. */
+  private startPostgresLogTail(resolved: ResolvedPostgres, instanceId: string): void {
+    this.stopLogTail();
+    this.logFile = postgresLogFile(resolved);
+
+    const tick = (): void => {
+      if (this.logFile !== null) {
+        try {
+          if (existsSync(this.logFile)) {
+            const content = readFileSync(this.logFile);
+            if (content.length < this.logOffset) {
+              this.logOffset = 0;
+            }
+            if (content.length > this.logOffset) {
+              const chunk = content.subarray(this.logOffset).toString('utf8');
+              this.logOffset = content.length;
+              if (chunk !== '') {
+                this.deps.logManager.push(this.projectId, instanceId, 'stdout', chunk);
+              }
+            }
+          }
+        } catch {
+          // leitura best-effort
+        }
+      }
+      this.logTimer = this.deps.clock.setTimeout(tick, 700);
+      this.logTimer.unref();
+    };
+    tick();
+  }
+
+  private stopLogTail(): void {
+    if (this.logTimer) {
+      this.deps.clock.clearTimeout(this.logTimer);
+      this.logTimer = null;
+    }
+  }
+
+  /**
+   * `initdb` roda uma única vez, antes do primeiro start. O data dir é próprio
+   * do projeto (o serviço 5432 do usuário não é tocado).
+   */
+  private async preparePostgres(instanceId: string): Promise<void> {
+    const resolved = resolvePostgresConfig(this.configValue, this.deps.postgresRoot);
+    if (isInitialized(resolved.dataDir)) {
+      return;
+    }
+    if (resolved.password.trim() === '') {
+      throw new AppError(
+        'PROJECT_INVALID_CONFIG',
+        `Defina uma senha para o PostgreSQL de "${this.configValue.name}" antes de iniciar.`,
+      );
+    }
+
+    mkdirSync(resolved.dataDir, { recursive: true });
+    const passwordFile = join(tmpdir(), `lsm-pg-${this.projectId}-${Date.now().toString(36)}.pw`);
+    writeFileSync(passwordFile, resolved.password, 'utf8');
+
+    const spec = initdbSpec(resolved, passwordFile);
+    this.deps.logManager.recordSystem(
+      this.projectId,
+      instanceId,
+      `initdb em ${resolved.dataDir} (usuário ${resolved.username})`,
+    );
+
+    let managed: ManagedProcess;
+    try {
+      managed = this.deps.processManager.spawn({
+        executable: spec.executable,
+        args: spec.args,
+        cwd: spec.cwd,
+        env: { ...this.configValue.environment },
+      });
+      managed.onStdout((chunk) =>
+        this.deps.logManager.push(this.projectId, instanceId, 'stdout', chunk),
+      );
+      managed.onStderr((chunk) =>
+        this.deps.logManager.push(this.projectId, instanceId, 'stderr', chunk),
+      );
+
+      const code = await waitForExit(managed, 180_000, () =>
+        this.deps.processManager.stop(managed.pid, { gracefulTimeoutMs: 5_000 }),
+      );
+      if (code !== 0) {
+        throw new AppError(
+          'PROJECT_START_FAILED',
+          `initdb falhou para "${this.configValue.name}". O data dir precisa estar vazio e acessível: ${resolved.dataDir}`,
+        );
+      }
+    } finally {
+      // O arquivo de senha só pode sair depois que o initdb termina de lê-lo.
+      rmSync(passwordFile, { force: true });
+    }
+
+    this.deps.logManager.recordSystem(
+      this.projectId,
+      instanceId,
+      `initdb concluído (porta ${resolved.port})`,
+    );
+  }
+
+  /** Garante que containers não fiquem órfãos quando o CLI é encerrado. */
+  private async cleanupCompose(instanceId: string): Promise<void> {
+    try {
+      const spec = composeDownArgs(this.configValue);
+      const managed = this.deps.processManager.spawn({
+        executable: spec.executable,
+        args: spec.args,
+        cwd: spec.cwd,
+        env: { ...this.configValue.environment },
+      });
+      managed.onStdout((chunk) =>
+        this.deps.logManager.push(this.projectId, instanceId, 'stdout', chunk),
+      );
+      managed.onStderr((chunk) =>
+        this.deps.logManager.push(this.projectId, instanceId, 'stderr', chunk),
+      );
+      await waitForExit(managed, 30_000, () =>
+        this.deps.processManager.stop(managed.pid, { gracefulTimeoutMs: 3_000 }),
+      );
+      this.deps.logManager.recordSystem(
+        this.projectId,
+        instanceId,
+        'docker compose down executado',
+      );
+    } catch (error) {
+      this.deps.logger.warn(
+        'Falha ao limpar containers do projeto Compose',
+        { projectId: this.projectId },
+        error,
+      );
+    }
   }
 
   private handleExit(instanceId: string, info: ExitInfo, spawnError?: Error): void {
@@ -943,6 +1256,24 @@ export class ProjectRuntime {
 
   private buildSpawnSpec(): SpawnSpec {
     const cwd = this.configValue.workingDirectory;
+    if (this.configValue.kind === 'postgres') {
+      const resolved = resolvePostgresConfig(this.configValue, this.deps.postgresRoot);
+      return {
+        ...postgresSpawnSpec(resolved),
+        env: { ...this.configValue.environment },
+        launchMode: 'direct',
+        launchNote: `PostgreSQL ${resolved.version ?? ''} em 127.0.0.1:${resolved.port}`.trim(),
+      };
+    }
+    if (this.configValue.kind === 'compose') {
+      return {
+        ...composeUpSpec(this.configValue),
+        env: { ...this.configValue.environment },
+        launchMode: 'direct',
+        launchNote: 'docker compose up (anexado)',
+      };
+    }
+
     let isDirectory = false;
     try {
       isDirectory = statSync(cwd).isDirectory();
@@ -1117,4 +1448,31 @@ export class ProjectRuntime {
       );
     }
   }
+}
+
+/** Espera o processo terminar (initdb/compose down) com timeout e kill. */
+function waitForExit(
+  managed: ManagedProcess,
+  timeoutMs: number,
+  onTimeout: () => Promise<unknown>,
+): Promise<number | null> {
+  return new Promise<number | null>((resolvePromise) => {
+    let settled = false;
+    const finish = (code: number | null): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      resolvePromise(code);
+    };
+    managed.onExit((info) => finish(info.code));
+    managed.onError(() => finish(null));
+    const timer = setTimeout(() => {
+      void onTimeout()
+        .catch(() => undefined)
+        .finally(() => finish(null));
+    }, timeoutMs);
+    timer.unref();
+  });
 }
