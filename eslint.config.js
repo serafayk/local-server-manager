@@ -13,6 +13,7 @@ export default tseslint.config(
       'apps/desktop/src-tauri/gen/**',
       'apps/desktop/src-tauri/resources/**',
       'apps/desktop/src-tauri/icons/**',
+      'lixo/**',
     ],
   },
   js.configs.recommended,

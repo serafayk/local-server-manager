@@ -36,3 +36,6 @@ desktop.ini
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
 apps/desktop/src-tauri/resources/engine/
+
+# Quarentena de artefatos antigos (ver lixo/README.md)
+lixo/
