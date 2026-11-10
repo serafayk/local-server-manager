@@ -44,13 +44,16 @@ import type { DomainService } from '../domains/domain-service';
 import type { TunnelManager } from '../tunnels/tunnel-manager';
 import { extractBearerToken, extractQueryToken, tokensMatch } from './auth';
 import { WebAuth } from './web-auth';
+import type { WebHosts } from './web-hosts';
 import {
   isAllowedHostHeader,
   isAllowedOrigin,
+  isLoopbackHost,
   parsePositiveInt,
   requestIdOf,
   sendFailure,
   sendSuccess,
+  splitHost,
 } from './http';
 import { WebSocketGateway, type WebSocketLike } from './websocket-gateway';
 
@@ -72,6 +75,7 @@ export interface ApiServerOptions {
   metrics: MetricsCollector;
   backups: BackupManager;
   webAuth: WebAuth;
+  webHosts: WebHosts;
   /** Diretório da UI web (null desabilita a hospedagem). */
   webDir: string | null;
   /** Porta preferida da API (0 = efêmera). Com Web UI, use uma fixa. */
@@ -194,6 +198,19 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
     });
 
     instance.post('/api/v1/auth/setup', async (request, reply) => {
+      // Primeiro acesso (definir senha) só por loopback: evita que alguém
+      // alcance a API por DNS rebinding e sequestre o painel antes do dono.
+      if (!isLoopbackHost(request.headers.host)) {
+        return sendFailure(
+          reply,
+          {
+            code: 'UNAUTHORIZED',
+            message: 'Defina a senha acessando o painel por 127.0.0.1.',
+          },
+          requestIdOf(request),
+          403,
+        );
+      }
       if (options.webAuth.isConfigured()) {
         return sendFailure(
           reply,
@@ -260,6 +277,46 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
         { configured: options.webAuth.isConfigured(), authenticated: false, csrf: null },
         requestIdOf(request),
       );
+    });
+
+    instance.get('/api/v1/web-hosts', async (request, reply) => {
+      const parsed = splitHost(request.headers.host);
+      return sendSuccess(
+        reply,
+        {
+          hosts: [...options.webHosts.list()],
+          currentHost: parsed?.hostname ?? '',
+          loopback: isLoopbackHost(request.headers.host),
+        },
+        requestIdOf(request),
+      );
+    });
+
+    instance.put('/api/v1/web-hosts', async (request, reply) => {
+      const body = request.body as { hosts?: unknown } | null;
+      try {
+        const hosts = options.webHosts.replace(body?.hosts);
+        const parsed = splitHost(request.headers.host);
+        return sendSuccess(
+          reply,
+          {
+            hosts,
+            currentHost: parsed?.hostname ?? '',
+            loopback: isLoopbackHost(request.headers.host),
+          },
+          requestIdOf(request),
+        );
+      } catch (error) {
+        if (!isAppError(error)) {
+          throw error;
+        }
+        return sendFailure(
+          reply,
+          { code: error.code, message: error.message },
+          requestIdOf(request),
+          400,
+        );
+      }
     });
 
     instance.get('/api/v1/health', async (request, reply) => {
@@ -833,7 +890,7 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
       if (request.url.startsWith('/api/v1/ws')) {
         return;
       }
-      if (!isAllowedHostHeader(request.headers.host, boundPort)) {
+      if (!isAllowedHostHeader(request.headers.host, boundPort, options.webHosts.list())) {
         return sendFailure(
           reply,
           { code: 'UNAUTHORIZED', message: 'Host não permitido' },
@@ -953,7 +1010,7 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
     const activeGateway = gateway;
 
     instance.get('/api/v1/ws', { websocket: true }, (socket, request) => {
-      if (!isAllowedHostHeader(request.headers.host, boundPort)) {
+      if (!isAllowedHostHeader(request.headers.host, boundPort, options.webHosts.list())) {
         socket.close(1008, 'forbidden');
         return;
       }

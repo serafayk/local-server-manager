@@ -137,6 +137,15 @@ export interface WebAuthStatus {
   csrf: string | null;
 }
 
+/** Hostnames públicos (túnel/reverse proxy) autorizados além do loopback. */
+export interface WebHostsConfig {
+  hosts: string[];
+  /** Hostname pelo qual a requisição chegou (sugestão para o painel). */
+  currentHost: string;
+  /** true quando o acesso veio por 127.0.0.1/localhost. */
+  loopback: boolean;
+}
+
 export interface PostgresInstallation {
   version: string;
   binDir: string;

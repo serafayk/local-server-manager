@@ -33,19 +33,46 @@ export function sendFailure(
 
 /**
  * Proteção contra DNS rebinding: o Host precisa ser loopback na porta real
- * do servidor. Requisições com Origin são validadas pelo CORS.
+ * do servidor ou um hostname explicitamente autorizado (painel atrás de
+ * túnel/proxy). Requisições com Origin são validadas pelo CORS.
  */
-export function isAllowedHostHeader(host: unknown, port: number): boolean {
+export function isAllowedHostHeader(
+  host: unknown,
+  port: number,
+  extraHosts: readonly string[] = [],
+): boolean {
+  const parsed = splitHost(host);
+  if (parsed === null) {
+    return false;
+  }
+  if (LOOPBACK_HOSTS.has(parsed.hostname)) {
+    return parsed.port === port;
+  }
+  return extraHosts.some((allowed) => allowed === parsed.hostname);
+}
+
+export function isLoopbackHost(host: unknown): boolean {
+  const parsed = splitHost(host);
+  return parsed !== null && LOOPBACK_HOSTS.has(parsed.hostname);
+}
+
+/** `host` no formato do cabeçalho (hostname[:porta], IPv6 entre colchetes). */
+export function splitHost(host: unknown): { hostname: string; port: number | null } | null {
   if (typeof host !== 'string' || host.length === 0) {
-    return false;
+    return null;
   }
-  const separator = host.lastIndexOf(':');
-  if (separator === -1) {
-    return false;
+  try {
+    const url = new URL(`http://${host}`);
+    if (url.hostname === '' || url.pathname !== '/') {
+      return null;
+    }
+    return {
+      hostname: url.hostname.toLowerCase(),
+      port: url.port === '' ? null : Number.parseInt(url.port, 10),
+    };
+  } catch {
+    return null;
   }
-  const hostname = host.slice(0, separator).toLowerCase();
-  const hostPort = Number.parseInt(host.slice(separator + 1), 10);
-  return LOOPBACK_HOSTS.has(hostname) && hostPort === port;
 }
 
 export function isAllowedOrigin(origin: unknown, allowedOrigins: readonly string[]): boolean {

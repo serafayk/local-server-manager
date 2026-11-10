@@ -299,8 +299,12 @@ Com o Engine em execução, a mesma interface pode ser aberta no navegador:
   reinicia.
 - O cookie é `HttpOnly` e `SameSite=Strict`; ações de escrita exigem token CSRF,
   então um site malicioso não consegue operar o painel.
-- Tudo continua restrito a **127.0.0.1**: o Engine só aceita `Host` de loopback, então
-  o painel não abre por túnel nem de outro dispositivo (exposição opcional na LAN está
-  no backlog).
+- Continua restrito a **127.0.0.1** por padrão: o Engine só aceita `Host` de loopback.
+  Para publicar o painel por um túnel/reverse proxy, autorize o hostname em
+  **Configurações → Acesso externo** (ou `PUT /api/v1/web-hosts`), informando só o
+  nome usado na URL — ex.: `lsmjinx.serafim.app.br`.
+- O hostname autorizado libera a mesma página naquele endereço; login, sessão e CSRF
+  continuam valendo. O **primeiro acesso** (definir senha) segue exigindo acesso por
+  `127.0.0.1`, para ninguém sequestrar o painel antes de você.
 - O botão **Abrir no navegador** em Configurações leva direto ao painel.
 - Os logs e eventos ao vivo funcionam na web (WebSocket autenticado por cookie).

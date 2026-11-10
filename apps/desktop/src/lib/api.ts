@@ -32,6 +32,7 @@ import type {
   UpdateTunnelRequest,
   CreateTunnelRequest,
   WebAuthStatus,
+  WebHostsConfig,
 } from '@lsm/contracts';
 
 export interface EngineEndpoint {
@@ -331,6 +332,14 @@ export class EngineClient {
 
   logoutWeb(): Promise<WebAuthStatus> {
     return this.request('POST', '/auth/logout', {});
+  }
+
+  getWebHosts(): Promise<WebHostsConfig> {
+    return this.request('GET', '/web-hosts');
+  }
+
+  setWebHosts(hosts: string[]): Promise<WebHostsConfig> {
+    return this.request('PUT', '/web-hosts', { hosts });
   }
 
   exportProjects(): Promise<ExportBundle> {

@@ -355,7 +355,10 @@ pnpm --filter @lsm/desktop tauri:build
 - `POST /auth/setup|login|logout`; Bearer token continua válido para o desktop.
 - Rate limit de 5 logins/min por IP; CSP restritiva nas páginas.
 - WebSocket aceita cookie (logs ao vivo na web).
-- Bind exclusivo em 127.0.0.1; LAN exposta fica no backlog.
+- Bind exclusivo em 127.0.0.1. Hosts externos (túnel/reverse proxy) entram por uma
+  allowlist explícita em `settings` (`web-hosts`), editável em Configurações e via
+  `GET/PUT /api/v1/web-hosts`; `Host` fora da lista continua rejeitado (DNS rebinding)
+  e o setup de senha exige loopback.
 
 ## 19. Limitações conhecidas (Fase 7+)
 

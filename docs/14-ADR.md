@@ -17,8 +17,14 @@ Este arquivo registra decisões arquiteturais. Novas decisões devem ser adicion
 5. **CSP** restritiva nas páginas (`default-src 'self'`, sem inline script) e `X-Content-Type-Options: nosniff`.
 6. **Bind exclusivo em 127.0.0.1**; exposição pública continua sendo papel dos túneis. LAN fica no backlog.
 7. **SPA fallback** apenas para rotas sem extensão; `/api/*` desconhecido mantém `ROUTE_NOT_FOUND`.
+8. **Hosts externos por allowlist** (0.16.2): o `Host` de uma requisição é controlado
+   pelo cliente, então liberar "qualquer nome" anularia a proteção de DNS rebinding.
+   A lista fica em `settings` (`web-hosts`), editável em Configurações ou por
+   `GET/PUT /api/v1/web-hosts`, e vale para HTTP e WebSocket. `POST /auth/setup`
+   continua exigindo `Host` de loopback — fechar o painel antes do dono definir a
+   senha é o pior cenário do rebinding.
 
-**Consequências:** o painel abre no navegador local (bookmark estável), com senha, sem depender do app aberto. A sessão cai quando o Engine reinicia (memória). O WebSocket aceita cookie, então logs ao vivo funcionam na web. Como o Engine valida `Host` de loopback, o painel não é alcançável por túnel/LAN — exposição opcional fica no backlog.
+**Consequências:** o painel abre no navegador local (bookmark estável), com senha, sem depender do app aberto, e pode ser publicado por túnel/reverse proxy autorizando o hostname. A sessão cai quando o Engine reinicia (memória). O WebSocket aceita cookie, então logs ao vivo funcionam na web. LAN exposta (alcançar pelo IP da máquina) segue no backlog: o proxy de domínios e os túneis são o caminho suportado.
 
 ## ADR-025 - Serviços além de Node: Compose e PostgreSQL dedicado
 

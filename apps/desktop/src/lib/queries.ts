@@ -12,6 +12,7 @@ export const queryKeys = {
   projectEvents: (id: string) => ['project-events', id] as const,
   events: (projectId: string | null) => ['events', projectId ?? 'all'] as const,
   settings: ['settings'] as const,
+  webHosts: ['web-hosts'] as const,
   health: ['health'] as const,
   engineInfo: ['engine-info'] as const,
   tunnel: (id: string) => ['tunnel', id] as const,

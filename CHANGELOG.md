@@ -2,6 +2,20 @@
 
 Todas as mudanças relevantes do projeto. Formato inspirado em Keep a Changelog.
 
+## [0.16.2] — 2026-11-10
+
+### Adicionado
+
+- **Allowlist de hostnames para o painel atrás de túnel/reverse proxy.** O Engine
+  rejeitava qualquer `Host` que não fosse loopback (`Host não permitido`), o que
+  impedia abrir o painel por um domínio público.
+  - `GET/PUT /api/v1/web-hosts` e card **Acesso externo** em Configurações.
+  - Entradas tolerantes: `https://Painel.Exemplo.com/` vira `painel.exemplo.com`.
+  - O hostname autorizado vale para a API e para o WebSocket (logs ao vivo).
+  - `POST /auth/setup` continua exigindo acesso por `127.0.0.1`, para ninguém
+    definir a senha primeiro via DNS rebinding.
+- 5 testes novos (normalização + integração com `Host` forjado).
+
 ## [0.16.1] — 2026-11-09
 
 ### Corrigido

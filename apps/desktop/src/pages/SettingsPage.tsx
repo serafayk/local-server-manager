@@ -31,10 +31,25 @@ export function SettingsPage() {
     refetchInterval: 15_000,
   });
 
+  const hostsQuery = useQuery({
+    queryKey: queryKeys.webHosts,
+    queryFn: () => client.getWebHosts(),
+  });
+  const hosts = hostsQuery.data?.hosts ?? [];
+
   const [batchConcurrency, setBatchConcurrency] = useState('4');
   const [logLevel, setLogLevel] = useState<'debug' | 'info' | 'warn' | 'error'>('info');
   const [metricsIntervalMs, setMetricsIntervalMs] = useState('5000');
   const [saved, setSaved] = useState(false);
+  const [hostInput, setHostInput] = useState('');
+
+  const saveHosts = useMutation({
+    mutationFn: (next: string[]) => client.setWebHosts(next),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.webHosts, data);
+      setHostInput('');
+    },
+  });
 
   useEffect(() => {
     if (settingsQuery.data) {
@@ -263,6 +278,71 @@ export function SettingsPage() {
               <dd className="mt-0.5 text-xs text-zinc-200">v{info?.protocolVersion ?? 1}</dd>
             </div>
           </dl>
+        </Card>
+
+        <Card title="Acesso externo (túnel)">
+          <p className="text-xs text-zinc-400">
+            O painel aceita sempre 127.0.0.1/localhost. Para publicar por túnel ou reverse proxy,
+            autorize o hostname usado na URL (sem <span className="mono">https://</span>). O
+            primeiro acesso e a definição de senha continuam exigindo acesso local.
+          </p>
+
+          {hostsQuery.error ? <ErrorBanner message={hostsQuery.error.message} /> : null}
+          {saveHosts.error ? <ErrorBanner message={saveHosts.error.message} /> : null}
+
+          <ul className="mt-3 space-y-2 text-sm">
+            {hosts.map((host) => (
+              <li key={host} className="flex items-center justify-between gap-3">
+                <span className="mono break-all text-xs text-zinc-200">{host}</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  loading={saveHosts.isPending}
+                  onClick={() => {
+                    saveHosts.mutate(hosts.filter((item) => item !== host));
+                  }}
+                >
+                  Remover
+                </Button>
+              </li>
+            ))}
+            {hosts.length === 0 ? (
+              <li className="text-xs text-zinc-500">Nenhum hostname externo autorizado.</li>
+            ) : null}
+          </ul>
+
+          <div className="mt-3 flex items-end gap-2">
+            <Field label="Hostname" htmlFor="web-host-input" className="flex-1">
+              <Input
+                id="web-host-input"
+                placeholder="painel.exemplo.com"
+                value={hostInput}
+                onChange={(event) => setHostInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && hostInput.trim() !== '') {
+                    event.preventDefault();
+                    saveHosts.mutate([...hosts, hostInput.trim()]);
+                  }
+                }}
+              />
+            </Field>
+            <Button
+              loading={saveHosts.isPending}
+              disabled={hostInput.trim() === ''}
+              onClick={() => {
+                saveHosts.mutate([...hosts, hostInput.trim()]);
+              }}
+            >
+              Autorizar
+            </Button>
+          </div>
+
+          {hostsQuery.data ? (
+            <p className="mt-3 text-[11px] text-zinc-600">
+              Acesso atual: <span className="mono">{hostsQuery.data.currentHost || '?'}</span>
+              {hostsQuery.data.loopback ? ' (loopback)' : ''}
+            </p>
+          ) : null}
         </Card>
 
         <Card title="Engine">

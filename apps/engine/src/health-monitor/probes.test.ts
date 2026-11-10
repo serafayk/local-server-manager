@@ -90,8 +90,14 @@ describe('probeTcp', () => {
   });
 
   it('reprova porta fechada e alvo inválido', async () => {
-    const port = await freePort();
-    expect((await probeTcp(`127.0.0.1:${port}`, 300)).ok).toBe(false);
+    // `freePort` devolve uma porta efêmera liberada; outro worker pode
+    // reocupá-la entre o bind e o probe, então tentamos algumas vezes.
+    let closed = false;
+    for (let attempt = 0; attempt < 10 && !closed; attempt += 1) {
+      const port = await freePort();
+      closed = !(await probeTcp(`127.0.0.1:${port}`, 300)).ok;
+    }
+    expect(closed).toBe(true);
     expect((await probeTcp('sem-porta', 300)).ok).toBe(false);
   });
 });
